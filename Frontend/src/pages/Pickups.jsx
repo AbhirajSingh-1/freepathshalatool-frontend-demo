@@ -9,6 +9,7 @@ import {
   POSTPONE_REASONS, PICKUP_MODES, CITIES, CITY_SECTORS,
 } from '../data/mockData'
 import { fmtDate, fmtCurrency, pickupStatusColor, paymentStatusColor, exportToExcel } from '../utils/helpers'
+import DonorSearchSelect from '../components/DonorSearchSelect'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -228,6 +229,7 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
   const filterSectors = filterCity ? (CITY_SECTORS[filterCity] || []) : []
   const formSectors   = CITY_SECTORS[form.city] || []
   const kabNames      = kabadiwalas.map(k => k.name)
+  const selectedDonor = donors.find(d => d.id === form.donorId) || null
 
   useEffect(() => {
     Promise.all([fetchPickups(), fetchDonors(), fetchKabadiwalas()])
@@ -236,7 +238,7 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
 
   useEffect(() => {
     if (triggerAddPickup) { openModal(); onAddPickupDone?.() }
-  }, [triggerAddPickup])
+  }, [triggerAddPickup, onAddPickupDone])
 
   const openModal = (pickup = null) => {
     setEditing(pickup)
@@ -253,6 +255,12 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
     const next = { ...f, [key]: val }
     if (key === 'city') next.sector = ''
     if (key === 'donorId') {
+      if (!val) {
+        next.donorName = ''
+        next.society   = ''
+        next.sector    = ''
+        next.city      = ''
+      }
       const donor = donors.find(d => d.id === val)
       if (donor) {
         next.donorName = donor.name
@@ -544,12 +552,27 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                 {/* Donor */}
                 <div className="form-group full">
                   <label>Donor <span className="required">*</span></label>
-                  <select value={form.donorId} onChange={e => setField('donorId', e.target.value)}>
-                    <option value="">Select donor…</option>
-                    {donors.filter(d => d.status !== 'Lost').map(d => (
-                      <option key={d.id} value={d.id}>{d.name} — {d.society}, {d.city}</option>
-                    ))}
-                  </select>
+                  <DonorSearchSelect
+                    donors={donors.filter(d => d.status !== 'Lost')}
+                    selectedDonor={selectedDonor}
+                    onSelect={(donor) => setField('donorId', donor?.id || '')}
+                  />
+                  {selectedDonor && (
+                    <div style={{
+                      padding: '10px 14px',
+                      background: 'var(--secondary-light)',
+                      borderRadius: 8,
+                      fontSize: 12.5,
+                      color: 'var(--secondary)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginTop: 8,
+                    }}>
+                      <Package size={13} />
+                      {[selectedDonor.society, selectedDonor.sector, selectedDonor.city].filter(Boolean).join(', ')}
+                    </div>
+                  )}
                 </div>
 
                 {/* Pickup Date */}
