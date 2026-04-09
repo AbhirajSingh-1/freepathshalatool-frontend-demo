@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
-import Sidebar           from './component/Layout/Sidebar'
-import Header            from './component/Layout/Header'
-import Dashboard         from './pages/Dashboard'
-import Donors            from './pages/Donors'
-import Pickups           from './pages/Pickups'
-import Kabadiwala        from './pages/Kabadiwala'
-import Payments          from './pages/Payments'
-import PickupScheduler   from './pages/PickupScheduler'
-import KabadiPickups     from './pages/KabadiPickups'
-import CustomerPickups   from './pages/CustomerPickups'
-import Reports           from './pages/Reports'
-import RaddiMaster       from './pages/RaddiMaster'   // ← NEW
-import { fetchPickups, fetchDonors } from './services/api'
+import { AppProvider }      from './context/AppContext'
+import Sidebar              from './component/Layout/Sidebar'
+import Header               from './component/Layout/Header'
+import Dashboard            from './pages/Dashboard'
+import Donors               from './pages/Donors'
+import Pickups              from './pages/Pickups'
+import Kabadiwala           from './pages/Kabadiwala'
+import Payments             from './pages/Payments'
+import PickupScheduler      from './pages/PickupScheduler'
+import KabadiPickups        from './pages/KabadiPickups'
+import CustomerPickups      from './pages/CustomerPickups'
+import Reports              from './pages/Reports'
+import RaddiMaster          from './pages/RaddiMaster'
 
 const PAGES = {
   dashboard:       Dashboard,
@@ -23,7 +23,7 @@ const PAGES = {
   kabadipickups:   KabadiPickups,
   customerpickups: CustomerPickups,
   reports:         Reports,
-  raddimaster:     RaddiMaster,     // ← NEW
+  raddimaster:     RaddiMaster,
 }
 
 function getPageFromHash() {
@@ -31,12 +31,11 @@ function getPageFromHash() {
   return PAGES[hash] ? hash : 'dashboard'
 }
 
-export default function App() {
+function AppInner() {
   const [page, setPage]      = useState(getPageFromHash)
   const [sidebarOpen, setSO] = useState(false)
   const [addDonor, setAddD]  = useState(false)
   const [addPickup, setAddP] = useState(false)
-  const [overdueCt, setOverdueCt] = useState(0)
 
   const navigate = (p) => {
     setPage(p)
@@ -45,19 +44,10 @@ export default function App() {
   }
 
   useEffect(() => {
-    const onHashChange = () => { setPage(getPageFromHash()) }
-    window.addEventListener('hashchange', onHashChange)
-    return () => window.removeEventListener('hashchange', onHashChange)
+    const onHash = () => setPage(getPageFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
   }, [])
-
-  useEffect(() => {
-    Promise.all([fetchDonors(), fetchPickups()]).then(([donors]) => {
-      const ct = donors.filter(d =>
-        d.nextPickup && new Date(d.nextPickup) < new Date() && d.status === 'Active'
-      ).length
-      setOverdueCt(ct)
-    })
-  }, [page])
 
   const PageComponent = PAGES[page] || Dashboard
 
@@ -68,7 +58,6 @@ export default function App() {
         onNav={navigate}
         open={sidebarOpen}
         onClose={() => setSO(false)}
-        overdueCount={overdueCt}
         onLogoClick={() => navigate('dashboard')}
       />
       <div className="main-content">
@@ -87,5 +76,13 @@ export default function App() {
         />
       </div>
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <AppProvider>
+      <AppInner />
+    </AppProvider>
   )
 }
