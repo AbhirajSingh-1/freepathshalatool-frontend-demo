@@ -1,28 +1,23 @@
 import {
   LayoutDashboard, Users, Truck, UserCheck, BarChart3,
-  MessageCircle, CalendarSearch, PackageSearch,
-  IndianRupee, CalendarDays, UserX,
+  CalendarSearch, PackageSearch, IndianRupee, CalendarDays,
 } from 'lucide-react'
 
 const NAV = [
   { section: 'Main' },
-  { id: 'dashboard',       label: 'Dashboard',           icon: LayoutDashboard },
+  { id: 'dashboard',       label: 'Dashboard',            icon: LayoutDashboard },
   { section: 'Management' },
-  { id: 'donors',          label: 'Donors',              icon: Users },
-  { id: 'pickups',         label: 'Pickups',             icon: Truck },
-  { id: 'kabadiwala',      label: 'Kabadiwala',          icon: UserCheck },
+  { id: 'donors',          label: 'Donors',               icon: Users },
+  { id: 'pickups',         label: 'Pickups',              icon: Truck },
+  { id: 'kabadiwala',      label: 'Kabadiwala',           icon: UserCheck },
   { section: 'Finance' },
-  { id: 'payments',        label: 'Payment Tracking',    icon: IndianRupee },
+  { id: 'payments',        label: 'Payment Tracking',     icon: IndianRupee },
   { section: 'Pickup Views' },
-  { id: 'pickupcalendar',  label: 'Pickup Calendar',     icon: CalendarDays },
-  { id: 'kabadipickups',   label: 'Kabadi Pickup List',  icon: CalendarSearch },
-  { id: 'customerpickups', label: 'Donor Pickup History',icon: PackageSearch },
-  // { section: 'Donors' },
-  // { id: 'lostpostponed',   label: 'Lost & Postponed',    icon: UserX },
-  // { section: 'Communication' },
-  // { id: 'whatsapp',        label: 'WhatsApp',            icon: MessageCircle },
+  { id: 'pickupscheduler', label: 'Pickup Scheduler',     icon: CalendarDays, showOverdueBadge: true },
+  { id: 'kabadipickups',   label: 'Kabadi Pickup List',   icon: CalendarSearch },
+  { id: 'customerpickups', label: 'Donor Pickup History', icon: PackageSearch },
   { section: 'Insights' },
-  { id: 'reports',         label: 'Reports',             icon: BarChart3 },
+  { id: 'reports',         label: 'Reports',              icon: BarChart3 },
 ]
 
 export default function Sidebar({ active, onNav, open, onClose, overdueCount, onLogoClick }) {
@@ -35,7 +30,6 @@ export default function Sidebar({ active, onNav, open, onClose, overdueCount, on
         />
       )}
       <aside className={`sidebar ${open ? 'open' : ''}`}>
-        {/* Logo — clicking it goes to Dashboard */}
         <div
           className="sidebar-brand"
           onClick={onLogoClick}
@@ -57,7 +51,8 @@ export default function Sidebar({ active, onNav, open, onClose, overdueCount, on
               <div key={i} className="nav-section-label">{item.section}</div>
             )
             const Icon = item.icon
-            const badge = item.id === 'pickups' && overdueCount > 0 ? overdueCount : null
+            const badge = (item.id === 'pickups' || item.showOverdueBadge) && overdueCount > 0
+              ? overdueCount : null
 
             return (
               <button

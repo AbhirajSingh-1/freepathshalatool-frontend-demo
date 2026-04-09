@@ -6,7 +6,7 @@ import Donors          from './pages/Donors'
 import Pickups         from './pages/Pickups'
 import Kabadiwala      from './pages/Kabadiwala'
 import Payments        from './pages/Payments'
-import PickupCalendar  from './pages/PickupCalendar'
+import PickupScheduler from './pages/PickupScheduler'
 import KabadiPickups   from './pages/KabadiPickups'
 import CustomerPickups from './pages/CustomerPickups'
 // import LostPostponed   from './pages/LostPostponed'
@@ -20,7 +20,7 @@ const PAGES = {
   pickups:         Pickups,
   kabadiwala:      Kabadiwala,
   payments:        Payments,
-  pickupcalendar:  PickupCalendar,
+  pickupscheduler: PickupScheduler,
   kabadipickups:   KabadiPickups,
   customerpickups: CustomerPickups,
   // lostpostponed:   LostPostponed,
@@ -31,6 +31,7 @@ const PAGES = {
 // Read initial page from URL hash, fall back to 'dashboard'
 function getPageFromHash() {
   const hash = window.location.hash.replace('#', '')
+  if (hash === 'pickupcalendar') return 'pickupscheduler'
   return PAGES[hash] ? hash : 'dashboard'
 }
 
