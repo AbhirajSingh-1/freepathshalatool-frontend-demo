@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react'
-import Sidebar         from './component/Layout/Sidebar'
-import Header          from './component/Layout/Header'
-import Dashboard       from './pages/Dashboard'
-import Donors          from './pages/Donors'
-import Pickups         from './pages/Pickups'
-import Kabadiwala      from './pages/Kabadiwala'
-import Payments        from './pages/Payments'
-import PickupScheduler from './pages/PickupScheduler'
-import KabadiPickups   from './pages/KabadiPickups'
-import CustomerPickups from './pages/CustomerPickups'
-// import LostPostponed   from './pages/LostPostponed'
-import Reports         from './pages/Reports'
-import WhatsApp        from './pages/WhatsApp'
+import Sidebar           from './component/Layout/Sidebar'
+import Header            from './component/Layout/Header'
+import Dashboard         from './pages/Dashboard'
+import Donors            from './pages/Donors'
+import Pickups           from './pages/Pickups'
+import Kabadiwala        from './pages/Kabadiwala'
+import Payments          from './pages/Payments'
+import PickupScheduler   from './pages/PickupScheduler'
+import KabadiPickups     from './pages/KabadiPickups'
+import CustomerPickups   from './pages/CustomerPickups'
+import Reports           from './pages/Reports'
+import RaddiMaster       from './pages/RaddiMaster'   // ← NEW
 import { fetchPickups, fetchDonors } from './services/api'
 
 const PAGES = {
@@ -23,15 +22,12 @@ const PAGES = {
   pickupscheduler: PickupScheduler,
   kabadipickups:   KabadiPickups,
   customerpickups: CustomerPickups,
-  // lostpostponed:   LostPostponed,
   reports:         Reports,
-  whatsapp:        WhatsApp,
+  raddimaster:     RaddiMaster,     // ← NEW
 }
 
-// Read initial page from URL hash, fall back to 'dashboard'
 function getPageFromHash() {
   const hash = window.location.hash.replace('#', '')
-  if (hash === 'pickupcalendar') return 'pickupscheduler'
   return PAGES[hash] ? hash : 'dashboard'
 }
 
@@ -42,24 +38,18 @@ export default function App() {
   const [addPickup, setAddP] = useState(false)
   const [overdueCt, setOverdueCt] = useState(0)
 
-  // Navigate: update state + URL hash
   const navigate = (p) => {
     setPage(p)
     window.location.hash = p
     setSO(false)
   }
 
-  // Listen for browser back/forward button
   useEffect(() => {
-    const onHashChange = () => {
-      const p = getPageFromHash()
-      setPage(p)
-    }
+    const onHashChange = () => { setPage(getPageFromHash()) }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
 
-  // Compute overdue badge count
   useEffect(() => {
     Promise.all([fetchDonors(), fetchPickups()]).then(([donors]) => {
       const ct = donors.filter(d =>

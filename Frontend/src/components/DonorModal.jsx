@@ -1,207 +1,181 @@
-import { useEffect, useState } from 'react'
-import { Building2, MapPin, Phone, User, X } from 'lucide-react'
+import { useState } from 'react'
+import { X, User, Phone, MapPin } from 'lucide-react'
+import { CITIES, CITY_SECTORS } from '../data/mockData'
+import { GURGAON_LOCATIONS } from '../data/schedulerData'
 
-const DEFAULT_FORM = {
-  name: '',
-  mobile: '',
-  city: 'Gurgaon',
-  sector: '',
-  society: '',
-  address: '',
+const EMPTY = {
+  name: '', mobile: '', city: 'Gurgaon', sector: '', society: '', address: '',
 }
 
-export default function DonorModal({ open, onClose, onSave, locations }) {
-  const [form, setForm] = useState(DEFAULT_FORM)
-  const [isSubmitting, setIsSubmitting] = useState(false)
+export default function DonorModal({ onClose, onAdd }) {
+  const [form, setForm] = useState(EMPTY)
+  const [saving, setSaving] = useState(false)
+  const [errors, setErrors] = useState({})
 
-  useEffect(() => {
-    if (!open) {
-      setForm(DEFAULT_FORM)
-      setIsSubmitting(false)
-    }
-  }, [open])
+  const sectors = CITY_SECTORS[form.city] || []
 
-  if (!open) return null
+  // Society list: cascading from Gurgaon data if available, else empty
+  const societies = form.city === 'Gurgaon' && form.sector
+    ? (GURGAON_LOCATIONS[form.sector] || [])
+    : []
 
-  const cities = Object.keys(locations)
-  const sectorOptions = Object.keys(locations[form.city]?.sectors || {})
-  const societyOptions = form.sector ? locations[form.city]?.sectors?.[form.sector] || [] : []
-
-  const setField = (field, value) => {
-    setForm((current) => {
-      const next = { ...current, [field]: value }
-
-      if (field === 'city') {
-        next.sector = ''
-        next.society = ''
-      }
-
-      if (field === 'sector') {
-        next.society = ''
-      }
-
+  const setField = (key, val) => {
+    setForm(f => {
+      const next = { ...f, [key]: val }
+      if (key === 'city')   { next.sector = ''; next.society = '' }
+      if (key === 'sector') { next.society = '' }
       return next
     })
+    setErrors(e => ({ ...e, [key]: '' }))
   }
 
-  const handleSubmit = async (event) => {
-    event.preventDefault()
-    if (!form.name.trim() || !form.mobile.trim() || !form.city || !form.sector || !form.society) {
-      return
-    }
+  const validate = () => {
+    const e = {}
+    if (!form.name.trim())   e.name   = 'Name is required'
+    if (!form.mobile.trim() || form.mobile.length < 10) e.mobile = 'Valid 10-digit mobile required'
+    if (!form.city)          e.city   = 'City is required'
+    return e
+  }
 
-    setIsSubmitting(true)
-
-    try {
-      await onSave({
-        ...form,
-        name: form.name.trim(),
-        mobile: form.mobile.trim(),
-        address: form.address.trim(),
-      })
-    } finally {
-      setIsSubmitting(false)
+  const handleSubmit = async () => {
+    const e = validate()
+    if (Object.keys(e).length) { setErrors(e); return }
+    setSaving(true)
+    // Simulate API delay
+    await new Promise(r => setTimeout(r, 800))
+    const newDonor = {
+      ...form,
+      id: `D${Date.now()}`,
+      status: 'Active',
+      totalRST: 0,
+      totalSKS: 0,
+      createdAt: new Date().toISOString().slice(0, 10),
     }
+    onAdd(newDonor)
+    setSaving(false)
   }
 
   return (
-    <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl overflow-hidden rounded-[28px] border border-white/30 bg-white shadow-2xl">
-        <div className="flex items-start justify-between border-b border-slate-200 px-6 py-5">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.28em] text-orange-600">New donor</p>
-            <h2 className="mt-2 text-2xl font-semibold text-slate-900">Add Gurgaon donor</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Create a donor profile and auto-select it for pickup scheduling.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full border border-slate-200 p-2 text-slate-500 transition hover:border-slate-300 hover:text-slate-700"
-            aria-label="Close donor modal"
-          >
-            <X className="h-4 w-4" />
+    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal" style={{ maxWidth: 560, width: '95vw' }}>
+        {/* Header */}
+        <div className="modal-header">
+          <User size={18} color="var(--primary)" />
+          <div className="modal-title">Add New Donor</div>
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}>
+            <X size={16} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5 px-6 py-6">
-          <div className="grid gap-5 md:grid-cols-2">
-            <label className="block">
-              <span className="scheduler-label mb-2 flex items-center gap-2">
-                <User className="h-4 w-4 text-orange-500" />
-                Name
-              </span>
+        {/* Body */}
+        <div className="modal-body">
+          <div className="form-grid">
+            {/* Name */}
+            <div className="form-group">
+              <label>Full Name <span className="required">*</span></label>
               <input
-                autoFocus
                 value={form.name}
-                onChange={(event) => setField('name', event.target.value)}
-                placeholder="Enter donor name"
-                className="scheduler-input"
+                onChange={e => setField('name', e.target.value)}
+                placeholder="e.g. Anjali Sharma"
+                autoFocus
               />
-            </label>
+              {errors.name && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 3 }}>{errors.name}</div>}
+            </div>
 
-            <label className="block">
-              <span className="scheduler-label mb-2 flex items-center gap-2">
-                <Phone className="h-4 w-4 text-orange-500" />
-                Mobile number
-              </span>
+            {/* Mobile */}
+            <div className="form-group">
+              <label>Mobile Number <span className="required">*</span></label>
               <input
                 value={form.mobile}
+                onChange={e => setField('mobile', e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit mobile"
                 inputMode="numeric"
                 maxLength={10}
-                onChange={(event) => setField('mobile', event.target.value.replace(/\D/g, ''))}
-                placeholder="10 digit mobile number"
-                className="scheduler-input"
               />
-            </label>
-          </div>
+              {errors.mobile && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 3 }}>{errors.mobile}</div>}
+            </div>
 
-          <div className="grid gap-5 md:grid-cols-3">
-            <label className="block">
-              <span className="scheduler-label mb-2 flex items-center gap-2">
-                <Building2 className="h-4 w-4 text-orange-500" />
-                City
-              </span>
-              <select
-                value={form.city}
-                onChange={(event) => setField('city', event.target.value)}
-                className="scheduler-select"
-              >
-                {cities.map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
+            {/* City */}
+            <div className="form-group">
+              <label>City <span className="required">*</span></label>
+              <select value={form.city} onChange={e => setField('city', e.target.value)}>
+                <option value="">Select City</option>
+                {CITIES.map(c => <option key={c}>{c}</option>)}
               </select>
-            </label>
+              {errors.city && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 3 }}>{errors.city}</div>}
+            </div>
 
-            <label className="block">
-              <span className="scheduler-label mb-2">Sector</span>
+            {/* Sector */}
+            <div className="form-group">
+              <label>Sector / Area</label>
               <select
                 value={form.sector}
-                onChange={(event) => setField('sector', event.target.value)}
-                className="scheduler-select"
+                onChange={e => setField('sector', e.target.value)}
+                disabled={!form.city}
               >
-                <option value="">Select sector</option>
-                {sectorOptions.map((sector) => (
-                  <option key={sector} value={sector}>
-                    {sector}
-                  </option>
-                ))}
+                <option value="">{form.city ? 'Select Sector' : 'Select City First'}</option>
+                {sectors.map(s => <option key={s}>{s}</option>)}
               </select>
-            </label>
+            </div>
 
-            <label className="block">
-              <span className="scheduler-label mb-2">Society</span>
-              <select
-                value={form.society}
-                onChange={(event) => setField('society', event.target.value)}
-                disabled={!form.sector}
-                className="scheduler-select"
-              >
-                <option value="">{form.sector ? 'Select society' : 'Select sector first'}</option>
-                {societyOptions.map((society) => (
-                  <option key={society} value={society}>
-                    {society}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {/* Society – cascading from Gurgaon data or free text */}
+            <div className="form-group">
+              <label>Society / Colony</label>
+              {societies.length > 0 ? (
+                <select value={form.society} onChange={e => setField('society', e.target.value)}>
+                  <option value="">Select Society</option>
+                  {societies.map(s => <option key={s}>{s}</option>)}
+                </select>
+              ) : (
+                <input
+                  value={form.society}
+                  onChange={e => setField('society', e.target.value)}
+                  placeholder="e.g. Green Park Residency"
+                />
+              )}
+            </div>
+
+            {/* Address */}
+            <div className="form-group">
+              <label>House / Flat No. <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>(optional)</span></label>
+              <input
+                value={form.address}
+                onChange={e => setField('address', e.target.value)}
+                placeholder="e.g. A-101, Flat 3B"
+              />
+            </div>
           </div>
 
-          <label className="block">
-            <span className="scheduler-label mb-2 flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-orange-500" />
-              Address
-              <span className="text-xs font-normal text-slate-400">Optional</span>
-            </span>
-            <textarea
-              value={form.address}
-              onChange={(event) => setField('address', event.target.value)}
-              placeholder="Flat number, tower, lane or landmark"
-              rows={3}
-              className="scheduler-textarea"
-            />
-          </label>
+          {/* Preview chip */}
+          {(form.sector || form.society) && (
+            <div style={{
+              marginTop: 14, padding: '10px 14px',
+              background: 'var(--secondary-light)', borderRadius: 8,
+              fontSize: 12.5, color: 'var(--secondary)',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <MapPin size={13} />
+              {[form.society, form.sector, form.city].filter(Boolean).join(', ')}
+            </div>
+          )}
+        </div>
 
-          <div className="flex flex-col-reverse gap-3 border-t border-slate-200 pt-5 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              className="scheduler-secondary-button"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="scheduler-primary-button"
-            >
-              {isSubmitting ? 'Saving donor...' : 'Save and select donor'}
-            </button>
-          </div>
-        </form>
+        {/* Footer */}
+        <div className="modal-footer">
+          <button className="btn btn-ghost" onClick={onClose} disabled={saving}>Cancel</button>
+          <button
+            className="btn btn-primary"
+            onClick={handleSubmit}
+            disabled={saving || !form.name.trim() || !form.mobile.trim()}
+          >
+            {saving ? (
+              <>
+                <span className="spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%' }} />
+                Adding…
+              </>
+            ) : '+ Add Donor'}
+          </button>
+        </div>
       </div>
     </div>
   )
