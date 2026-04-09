@@ -647,55 +647,83 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                     <IndianRupee size={14} color="var(--warning)" /> Payment Details
                   </label>
                   <div className="form-grid" style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-light)' }}>
-                    {/* Total RST Weight */}
-                    <div className="form-group full" style={{ margin: 0 }}>
-                      <label>Total RST Weight</label>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <input
-                          type="number" min="0" step="0.1" inputMode="decimal"
-                          placeholder="0"
-                          value={form.rstTotalWeight}
-                          onChange={e => setField('rstTotalWeight', e.target.value)}
-                          style={{ flex: 1 }}
-                        />
-                        <div style={{ display: 'flex', borderRadius: 8, overflow: 'hidden', border: '1.5px solid var(--border)', flexShrink: 0 }}>
-                          {['kg', 'gm'].map(u => (
-                            <button
-                              key={u}
-                              type="button"
-                              onClick={() => setField('rstWeightUnit', u)}
-                              style={{
-                                padding: '6px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none',
-                                background: form.rstWeightUnit === u ? 'var(--primary)' : 'var(--surface)',
-                                color: form.rstWeightUnit === u ? '#fff' : 'var(--text-secondary)',
-                                transition: 'all 0.15s',
-                              }}
-                            >{u}</button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
+                   {/* Total RST Weight */}
+<div className="form-group full" style={{ margin: 0 }}>
+  <label>Total RST Weight</label>
+
+  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+    
+    <input
+      type="text"
+      inputMode="decimal"
+      placeholder="0"
+      value={form.rstTotalWeight}
+      onChange={(e) => {
+        const val = e.target.value.replace(/[^0-9.]/g, '')
+        setField('rstTotalWeight', val)
+      }}
+      style={{
+        width: '100px',
+        padding: '8px 10px',
+        fontSize: 13,
+        border: '1.5px solid var(--border)',
+        borderRadius: 8,
+        background: 'var(--surface)'
+      }}
+    />
+
+    <select
+      value={form.rstWeightUnit}
+      onChange={(e) => setField('rstWeightUnit', e.target.value)}
+      style={{
+        padding: '8px 10px',
+        fontSize: 13,
+        borderRadius: 8,
+        border: '1.5px solid var(--border)',
+        background: 'var(--surface)',
+        cursor: 'pointer',
+        minWidth: '70px'
+      }}
+    >
+      <option value="kg">kg</option>
+      <option value="gm">gm</option>
+    </select>
+
+  </div>
+</div>
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label>
-                        Total Pickup Value (₹)
-                        <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>(Kabadiwala pays FP)</span>
-                      </label>
-                      <input
-                        type="number" min="0" inputMode="numeric"
-                        placeholder="0"
-                        value={form.totalValue}
-                        onChange={e => setField('totalValue', e.target.value)}
-                      />
-                    </div>
+  <label>
+    Total Pickup Value (₹)
+    <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>
+      (Kabadiwala pays FP)
+    </span>
+  </label>
+
+  <input
+    type="text"
+    inputMode="numeric"
+    placeholder="0"
+    value={form.totalValue}
+    onChange={(e) => {
+      const val = e.target.value.replace(/[^0-9]/g, '')
+      setField('totalValue', val)
+    }}
+  />
+</div>
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label>Amount Paid (₹)</label>
-                      <input
-                        type="number" min="0" inputMode="numeric"
-                        placeholder="0"
-                        value={form.amountPaid}
-                        onChange={e => setField('amountPaid', e.target.value)}
-                      />
-                    </div>
+  <label>Amount Paid (₹)</label>
+
+  <input
+    type="text"
+    inputMode="numeric"
+    placeholder="0"
+    value={form.amountPaid}
+    onChange={(e) => {
+      const val = e.target.value.replace(/[^0-9]/g, '')
+      setField('amountPaid', val)
+    }}
+  />
+</div>
                     <div className="form-group" style={{ margin: 0 }}>
                       <label>Payment Status</label>
                       <select value={form.paymentStatus} onChange={e => setField('paymentStatus', e.target.value)}>
