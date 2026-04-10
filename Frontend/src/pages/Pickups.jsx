@@ -1,30 +1,55 @@
-import { useState, useEffect } from 'react'
+// Frontend/src/pages/Pickups.jsx
+// ─── Pickups Page — 100% global state via useApp() ───────────────────────────
+//
+// KEY FIX:  This page NO LONGER calls fetchDonors() / fetchPickups() from api.js.
+//           All data comes from AppContext which is the single source of truth.
+//           Any donor added via PickupScheduler is immediately visible here.
+//
+// DONOR RESOLUTION:
+//   pickup.donorId  →  donors.find(d => d.id === pickup.donorId)
+//   Fallback: pickup.donorName (snapshot stored at creation time)
+
+import { useState, useEffect, useMemo } from 'react'
 import {
   Search, Plus, Edit2, Trash2, X, Truck, Download,
   ChevronDown, ChevronUp, Filter, IndianRupee, CheckSquare, Square, Package,
 } from 'lucide-react'
-import { fetchPickups, fetchDonors, fetchKabadiwalas, createPickup, updatePickup, deletePickup } from '../services/api'
+import { useApp } from '../context/AppContext'
 import {
   RST_ITEMS, SKS_ITEMS, PICKUP_STATUSES, PAYMENT_STATUSES,
   POSTPONE_REASONS, PICKUP_MODES, CITIES, CITY_SECTORS,
 } from '../data/mockData'
-import { fmtDate, fmtCurrency, pickupStatusColor, paymentStatusColor, exportToExcel } from '../utils/helpers'
+import {
+  fmtDate, fmtCurrency, pickupStatusColor, paymentStatusColor, exportToExcel,
+} from '../utils/helpers'
 import DonorSearchSelect from '../components/DonorSearchSelect'
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const today = () => new Date().toISOString().slice(0, 10)
 
 const EMPTY_FORM = {
-  donorId: '', donorName: '', society: '', sector: '', city: '',
-  date: today(), status: 'Pending', pickupMode: 'Individual',
-  type: 'RST',
-  rstItems: [],
-  sksItems: [],
+  donorId:        '',
+  donorName:      '',  // snapshot – filled automatically from selected donor
+  society:        '',
+  sector:         '',
+  city:           '',
+  date:           today(),
+  status:         'Pending',
+  pickupMode:     'Individual',
+  type:           'RST',
+  rstItems:       [],
+  sksItems:       [],
   sksItemDetails: {},
   rstTotalWeight: '',
-  rstWeightUnit: 'kg',
-  totalValue: '', amountPaid: '', paymentStatus: 'Not Paid',
-  kabadiwala: '', kabadiMobile: '',
-  nextDate: '', postponeReason: '', notes: '',
+  rstWeightUnit:  'kg',
+  totalValue:     '',
+  amountPaid:     '',
+  paymentStatus:  'Not Paid',
+  kabadiwala:     '',
+  kabadiMobile:   '',
+  nextDate:       '',
+  postponeReason: '',
+  notes:          '',
 }
 
 const SKS_PACKAGING_OPTIONS = [
@@ -35,25 +60,24 @@ const SKS_PACKAGING_OPTIONS = [
   { value: 'large_box',  label: 'Large box'        },
 ]
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
 function RSTItemSelector({ rstItems, onChangeItems }) {
-  const toggle = (item) => {
-    if (rstItems.includes(item)) onChangeItems(rstItems.filter(i => i !== item))
-    else onChangeItems([...rstItems, item])
-  }
+  const toggle = (item) => onChangeItems(
+    rstItems.includes(item) ? rstItems.filter(i => i !== item) : [...rstItems, item]
+  )
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
       {RST_ITEMS.map(item => {
         const checked = rstItems.includes(item)
         return (
-          <button key={item} type="button" onClick={() => toggle(item)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '4px 10px', borderRadius: 20, fontSize: 12,
-              border: `1.5px solid ${checked ? 'var(--primary)' : 'var(--border)'}`,
-              background: checked ? 'var(--primary-light)' : 'transparent',
-              color: checked ? 'var(--primary)' : 'var(--text-secondary)',
-              cursor: 'pointer', fontWeight: checked ? 600 : 400, transition: 'all 0.15s',
-            }}>
+          <button key={item} type="button" onClick={() => toggle(item)} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '4px 10px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+            border: `1.5px solid ${checked ? 'var(--primary)' : 'var(--border)'}`,
+            background: checked ? 'var(--primary-light)' : 'transparent',
+            color: checked ? 'var(--primary)' : 'var(--text-secondary)',
+            fontWeight: checked ? 600 : 400, transition: 'all 0.15s',
+          }}>
             {checked ? <CheckSquare size={12} /> : <Square size={12} />}
             {item}
           </button>
@@ -64,25 +88,23 @@ function RSTItemSelector({ rstItems, onChangeItems }) {
 }
 
 function SKSItemSelector({ sksItems, sksItemDetails, onChangeItems, onChangeDetail }) {
-  const toggle = (item) => {
-    if (sksItems.includes(item)) onChangeItems(sksItems.filter(i => i !== item))
-    else onChangeItems([...sksItems, item])
-  }
+  const toggle = (item) => onChangeItems(
+    sksItems.includes(item) ? sksItems.filter(i => i !== item) : [...sksItems, item]
+  )
   return (
     <div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: sksItems.length > 0 ? 14 : 0 }}>
         {SKS_ITEMS.map(item => {
           const checked = sksItems.includes(item)
           return (
-            <button key={item} type="button" onClick={() => toggle(item)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '4px 10px', borderRadius: 20, fontSize: 12,
-                border: `1.5px solid ${checked ? 'var(--info)' : 'var(--border)'}`,
-                background: checked ? 'var(--info-bg)' : 'transparent',
-                color: checked ? 'var(--info)' : 'var(--text-secondary)',
-                cursor: 'pointer', fontWeight: checked ? 600 : 400, transition: 'all 0.15s',
-              }}>
+            <button key={item} type="button" onClick={() => toggle(item)} style={{
+              display: 'flex', alignItems: 'center', gap: 5,
+              padding: '4px 10px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+              border: `1.5px solid ${checked ? 'var(--info)' : 'var(--border)'}`,
+              background: checked ? 'var(--info-bg)' : 'transparent',
+              color: checked ? 'var(--info)' : 'var(--text-secondary)',
+              fontWeight: checked ? 600 : 400, transition: 'all 0.15s',
+            }}>
               {checked ? <CheckSquare size={12} /> : <Square size={12} />}
               {item}
             </button>
@@ -109,8 +131,10 @@ function SKSItemSelector({ sksItems, sksItemDetails, onChangeItems, onChangeDeta
               </div>
             )
           })}
-          <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border-light)', fontSize: 12.5, color: 'var(--text-secondary)', background: 'var(--info-bg)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <span>Total: <strong style={{ color: 'var(--info)' }}>{sksItems.reduce((s, item) => s + (Number(sksItemDetails[item]?.quantity) || 0), 0)}</strong></span>
+          <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border-light)', fontSize: 12.5, color: 'var(--text-secondary)', background: 'var(--info-bg)' }}>
+            Total: <strong style={{ color: 'var(--info)' }}>
+              {sksItems.reduce((s, item) => s + (Number(sksItemDetails[item]?.quantity) || 0), 0)}
+            </strong>
           </div>
         </div>
       )}
@@ -118,170 +142,247 @@ function SKSItemSelector({ sksItems, sksItemDetails, onChangeItems, onChangeDeta
   )
 }
 
+// ─── Main Component ───────────────────────────────────────────────────────────
 export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
-  const [pickups, setPickups]         = useState([])
-  const [donors, setDonors]           = useState([])
-  const [kabadiwalas, setKabadiwalas] = useState([])
-  const [loading, setLoading]         = useState(true)
-  const [modal, setModal]             = useState(false)
-  const [editing, setEditing]         = useState(null)
-  const [form, setForm]               = useState(EMPTY_FORM)
-  const [saving, setSaving]           = useState(false)
+
+  // ════════════════════════════════════════════════════════════════════════
+  // ALL DATA FROM GLOBAL STATE — no local copies, no api.js calls
+  // ════════════════════════════════════════════════════════════════════════
+  const {
+    donors,           // global donors — includes donors added from ANY page
+    pickups,          // global pickups
+    kabadiwalas,      // global kabadiwalas
+    createPickup,     // create new pickup (any status)
+    updatePickup,     // patch existing pickup
+    deletePickup,     // remove pickup
+  } = useApp()
+
+  // ── UI-only local state ───────────────────────────────────────────────────
+  const [modal,      setModal]      = useState(false)
+  const [editing,    setEditing]    = useState(null)
+  const [form,       setForm]       = useState(EMPTY_FORM)
+  const [saving,     setSaving]     = useState(false)
+  const [expandedId, setExpandedId] = useState(null)
 
   // Filters
-  const [search, setSearch]             = useState('')
-  const [filterStatus, setFilterStatus] = useState('All')
-  const [filterMode, setFilterMode]     = useState('All')
-  const [filterCity, setFilterCity]     = useState('')
-  const [filterSector, setFilterSector] = useState('')
-  const [filterKab, setFilterKab]       = useState('All')
+  const [search,        setSearch]        = useState('')
+  const [filterStatus,  setFilterStatus]  = useState('All')
+  const [filterMode,    setFilterMode]    = useState('All')
+  const [filterCity,    setFilterCity]    = useState('')
+  const [filterSector,  setFilterSector]  = useState('')
+  const [filterKab,     setFilterKab]     = useState('All')
   const [filterPayment, setFilterPayment] = useState('All')
-  const [dateFrom, setDateFrom]         = useState('')
-  const [dateTo, setDateTo]             = useState('')
-  const [showFilters, setShowFilters]   = useState(false)
-  const [expandedId, setExpandedId]     = useState(null)
+  const [dateFrom,      setDateFrom]      = useState('')
+  const [dateTo,        setDateTo]        = useState('')
+  const [showFilters,   setShowFilters]   = useState(false)
+
+  // ── Derived lists ─────────────────────────────────────────────────────────
+  const activeDonors = useMemo(
+    () => donors.filter(d => d.status !== 'Lost'),
+    [donors]
+  )
+
+  const kabNames = useMemo(
+    () => kabadiwalas.map(k => k.name),
+    [kabadiwalas]
+  )
 
   const filterSectors = filterCity ? (CITY_SECTORS[filterCity] || []) : []
   const formSectors   = CITY_SECTORS[form.city] || []
-  const kabNames      = kabadiwalas.map(k => k.name)
-  const selectedDonor = donors.find(d => d.id === form.donorId) || null
 
-  useEffect(() => {
-    Promise.all([fetchPickups(), fetchDonors(), fetchKabadiwalas()])
-      .then(([p, d, k]) => { setPickups(p); setDonors(d); setKabadiwalas(k); setLoading(false) })
-  }, [])
+  // Donor linked to the form's donorId
+  const selectedDonor = useMemo(
+    () => activeDonors.find(d => d.id === form.donorId) || null,
+    [activeDonors, form.donorId]
+  )
 
+  // ── Open modal from header "+ Record Pickup" button ───────────────────────
   useEffect(() => {
     if (triggerAddPickup) { openModal(); onAddPickupDone?.() }
-  }, [triggerAddPickup, onAddPickupDone])
+  }, [triggerAddPickup])
 
+  // ── Modal helpers ─────────────────────────────────────────────────────────
   const openModal = (pickup = null) => {
     setEditing(pickup)
-    setForm(pickup ? { ...EMPTY_FORM, ...pickup } : EMPTY_FORM)
+    if (pickup) {
+      // Editing: resolve donor from global state (donorId is the truth)
+      const donor = donors.find(d => d.id === pickup.donorId)
+      setForm({
+        ...EMPTY_FORM,
+        ...pickup,
+        donorId:   pickup.donorId   || '',
+        donorName: donor?.name      || pickup.donorName || '',
+        society:   donor?.society   || pickup.society   || '',
+        sector:    donor?.sector    || pickup.sector     || '',
+        city:      donor?.city      || pickup.city       || '',
+      })
+    } else {
+      setForm(EMPTY_FORM)
+    }
     setModal(true)
   }
   const closeModal = () => { setModal(false); setEditing(null) }
 
+  // ── Field setter — handles cascades ──────────────────────────────────────
   const setField = (key, val) => setForm(f => {
     const next = { ...f, [key]: val }
-    if (key === 'city') next.sector = ''
+
+    // When a donor is selected, snapshot their location fields
     if (key === 'donorId') {
-      if (!val) { next.donorName = ''; next.society = ''; next.sector = ''; next.city = '' }
-      const donor = donors.find(d => d.id === val)
-      if (donor) { next.donorName = donor.name; next.society = donor.society || ''; next.sector = donor.sector || ''; next.city = donor.city || '' }
+      const donor = activeDonors.find(d => d.id === val)
+      if (donor) {
+        next.donorName = donor.name
+        next.society   = donor.society || ''
+        next.sector    = donor.sector  || ''
+        next.city      = donor.city    || ''
+      } else {
+        next.donorName = ''; next.society = ''; next.sector = ''; next.city = ''
+      }
     }
+
+    // City reset cascades sector
+    if (key === 'city') next.sector = ''
+
+    // Auto-fill kabadiwala mobile
     if (key === 'kabadiwala') {
       const kab = kabadiwalas.find(k => k.name === val)
       next.kabadiMobile = kab?.mobile || ''
     }
+
+    // Auto-derive payment status
     if (key === 'amountPaid' || key === 'totalValue') {
       const total = Number(key === 'totalValue' ? val : next.totalValue) || 0
       const paid  = Number(key === 'amountPaid'  ? val : next.amountPaid)  || 0
-      if (total === 0)        next.paymentStatus = 'Not Paid'
+      if      (total === 0)   next.paymentStatus = 'Not Paid'
       else if (paid >= total) next.paymentStatus = 'Paid'
       else if (paid > 0)      next.paymentStatus = 'Partially Paid'
       else                    next.paymentStatus = 'Not Paid'
     }
+
     return next
   })
 
-  const setRSTItems = (items) => setForm(f => ({ ...f, rstItems: items }))
-  const setSKSItems = (items) => setForm(f => ({ ...f, sksItems: items }))
-  const setSKSDetail = (item, detail) => setForm(f => ({ ...f, sksItemDetails: { ...f.sksItemDetails, [item]: detail } }))
+  const setRSTItems  = (items)         => setForm(f => ({ ...f, rstItems: items }))
+  const setSKSItems  = (items)         => setForm(f => ({ ...f, sksItems: items }))
+  const setSKSDetail = (item, detail)  => setForm(f => ({ ...f, sksItemDetails: { ...f.sksItemDetails, [item]: detail } }))
 
+  // ── Save (create or update) ───────────────────────────────────────────────
   const save = async () => {
     if (!form.donorId || !form.date) return
     setSaving(true)
     try {
+      // Resolve live donor name at save time (in case donor was edited after selection)
+      const donor = activeDonors.find(d => d.id === form.donorId)
+
       const payload = {
         ...form,
-        totalValue: Number(form.totalValue) || 0,
-        amountPaid: Number(form.amountPaid) || 0,
-        type: form.rstItems.length > 0 && form.sksItems.length > 0 ? 'RST+SKS'
-            : form.rstItems.length > 0 ? 'RST'
-            : form.sksItems.length > 0 ? 'SKS' : 'RST',
+        donorName:    donor?.name     || form.donorName,
+        mobile:       donor?.mobile   || '',
+        society:      donor?.society  || form.society,
+        sector:       donor?.sector   || form.sector,
+        city:         donor?.city     || form.city,
+        totalValue:   Number(form.totalValue) || 0,
+        amountPaid:   Number(form.amountPaid)  || 0,
+        // Derive type from items chosen
+        type:
+          form.rstItems.length > 0 && form.sksItems.length > 0 ? 'RST+SKS'
+          : form.rstItems.length > 0                            ? 'RST'
+          : form.sksItems.length > 0                            ? 'SKS'
+          : 'RST',
       }
+
       if (editing) {
-        const updated = await updatePickup(editing.id, payload)
-        setPickups(ps => ps.map(p => p.id === editing.id ? updated : p))
+        await updatePickup(editing.id, payload)
       } else {
-        const newP = await createPickup(payload)
-        setPickups(ps => [newP, ...ps])
+        await createPickup(payload)
       }
       closeModal()
-    } finally { setSaving(false) }
+    } finally {
+      setSaving(false)
+    }
   }
 
   const remove = async (id) => {
     if (!confirm('Delete this pickup record?')) return
     await deletePickup(id)
-    setPickups(ps => ps.filter(p => p.id !== id))
+    if (expandedId === id) setExpandedId(null)
   }
 
+  // ── Export ────────────────────────────────────────────────────────────────
   const handleExport = () => {
-    exportToExcel(filtered.map(p => ({
-      'Pickup ID': p.id, Donor: p.donorName, Date: p.date,
-      City: p.city, Sector: p.sector, Society: p.society,
-      Mode: p.pickupMode, Type: p.type, Status: p.status,
-      'RST Items': (p.rstItems || []).join(', '),
-      'SKS Items': (p.sksItems || []).join(', '),
-      'Weight': p.rstTotalWeight ? `${p.rstTotalWeight} ${p.rstWeightUnit || 'kg'}` : '',
-      'Total Value (₹)': p.totalValue,
-      'Amount Paid (₹)': p.amountPaid,
-      'Payment Status': p.paymentStatus,
-      Kabadiwala: p.kabadiwala,
-      'Next Date': p.nextDate,
-      Notes: p.notes,
-    })), 'Pickups_Export')
+    exportToExcel(filteredPickups.map(p => {
+      const donor = donors.find(d => d.id === p.donorId)
+      return {
+        'Pickup ID':    p.id,
+        Donor:          donor?.name     || p.donorName,
+        Mobile:         donor?.mobile   || p.mobile || '',
+        Date:           p.date,
+        City:           donor?.city     || p.city,
+        Sector:         donor?.sector   || p.sector,
+        Society:        donor?.society  || p.society,
+        Mode:           p.pickupMode,
+        Type:           p.type,
+        Status:         p.status,
+        'RST Items':    (p.rstItems  || []).join(', '),
+        'SKS Items':    (p.sksItems  || []).join(', '),
+        Weight:         p.rstTotalWeight ? `${p.rstTotalWeight} ${p.rstWeightUnit || 'kg'}` : '',
+        'Total Value':  p.totalValue,
+        'Amount Paid':  p.amountPaid,
+        'Payment':      p.paymentStatus,
+        Kabadiwala:     p.kabadiwala,
+        'Next Date':    p.nextDate,
+        Notes:          p.notes,
+      }
+    }), 'Pickups_Export')
   }
 
-  const q = search.toLowerCase()
-  const filtered = pickups.filter(p => {
-    const matchQ      = !q || p.donorName?.toLowerCase().includes(q) || p.society?.toLowerCase().includes(q) || p.id?.toLowerCase().includes(q)
-    const matchStatus = filterStatus === 'All'  || p.status === filterStatus
-    const matchCity   = !filterCity   || p.city === filterCity
-    const matchSector = !filterSector || p.sector === filterSector
-    const matchKab    = filterKab === 'All'     || p.kabadiwala === filterKab
-    const matchMode   = filterMode === 'All'    || p.pickupMode === filterMode
-    const matchPay    = filterPayment === 'All' || p.paymentStatus === filterPayment
-    const matchFrom   = !dateFrom || p.date >= dateFrom
-    const matchTo     = !dateTo   || p.date <= dateTo
-    return matchQ && matchStatus && matchCity && matchSector && matchKab && matchMode && matchPay && matchFrom && matchTo
-  }).sort((a, b) => b.date.localeCompare(a.date))
+  // ── Filtering ─────────────────────────────────────────────────────────────
+  const filteredPickups = useMemo(() => {
+    const q = search.toLowerCase()
+    return pickups.filter(p => {
+      // Resolve donor for search (handles donors added after pickup was created)
+      const donor = donors.find(d => d.id === p.donorId)
+      const name  = donor?.name    || p.donorName || ''
+      const soc   = donor?.society || p.society   || ''
+      const city  = donor?.city    || p.city      || ''
+      const sec   = donor?.sector  || p.sector    || ''
+
+      const matchQ      = !q || name.toLowerCase().includes(q) || soc.toLowerCase().includes(q) || p.id?.toLowerCase().includes(q)
+      const matchStatus = filterStatus  === 'All' || p.status      === filterStatus
+      const matchCity   = !filterCity              || city          === filterCity
+      const matchSector = !filterSector            || sec           === filterSector
+      const matchKab    = filterKab     === 'All' || p.kabadiwala  === filterKab
+      const matchMode   = filterMode    === 'All' || p.pickupMode  === filterMode
+      const matchPay    = filterPayment === 'All' || p.paymentStatus === filterPayment
+      const matchFrom   = !dateFrom || (p.date || '') >= dateFrom
+      const matchTo     = !dateTo   || (p.date || '') <= dateTo
+
+      return matchQ && matchStatus && matchCity && matchSector && matchKab && matchMode && matchPay && matchFrom && matchTo
+    }).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  }, [pickups, donors, search, filterStatus, filterCity, filterSector, filterKab, filterMode, filterPayment, dateFrom, dateTo])
 
   const hasAdvFilters = filterCity || filterSector || filterKab !== 'All' || filterPayment !== 'All' || dateFrom || dateTo
 
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="page-body">
 
-      {/* ── Primary Filter Row ── */}
+      {/* ── Filter Row ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-        {/* Row 1: Search + status + mode + buttons */}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          {/* Search */}
           <div style={{ position: 'relative', flex: '2 1 180px', minWidth: 0 }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-            <input
-              placeholder="Search donor, society, ID…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              style={{ paddingLeft: 32, fontSize: 13, width: '100%' }}
-            />
+            <input placeholder="Search donor, society, ID…" value={search} onChange={e => setSearch(e.target.value)} style={{ paddingLeft: 32, fontSize: 13, width: '100%' }} />
           </div>
-          {/* Status */}
-          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-            style={{ flex: '1 1 120px', minWidth: 0, fontSize: 13 }}>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ flex: '1 1 120px', minWidth: 0, fontSize: 13 }}>
             <option value="All">All Status</option>
             {PICKUP_STATUSES.map(s => <option key={s}>{s}</option>)}
           </select>
-          {/* Mode */}
-          <select value={filterMode} onChange={e => setFilterMode(e.target.value)}
-            style={{ flex: '1 1 110px', minWidth: 0, fontSize: 13 }}>
+          <select value={filterMode} onChange={e => setFilterMode(e.target.value)} style={{ flex: '1 1 110px', minWidth: 0, fontSize: 13 }}>
             <option value="All">All Modes</option>
             <option value="Individual">Individual</option>
             <option value="Drive">Drive</option>
           </select>
-          {/* Action buttons */}
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button
               className={`btn btn-sm ${showFilters ? 'btn-outline' : 'btn-ghost'}`}
@@ -305,17 +406,8 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
           </div>
         </div>
 
-        {/* Row 2: Advanced filters (collapsible) */}
         {showFilters && (
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-            gap: 8,
-            padding: 12,
-            background: 'var(--bg)',
-            borderRadius: 10,
-            border: '1px solid var(--border-light)',
-          }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, padding: 12, background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border-light)' }}>
             <select value={filterKab} onChange={e => setFilterKab(e.target.value)} style={{ fontSize: 12 }}>
               <option value="All">All Kabadiwalas</option>
               {kabNames.map(k => <option key={k}>{k}</option>)}
@@ -351,13 +443,11 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 12px' }}>
-        <strong>{filtered.length}</strong> pickup record{filtered.length !== 1 ? 's' : ''}
+        <strong>{filteredPickups.length}</strong> pickup record{filteredPickups.length !== 1 ? 's' : ''}
       </div>
 
-      {/* ── List ── */}
-      {loading ? (
-        <div className="empty-state"><p>Loading…</p></div>
-      ) : filtered.length === 0 ? (
+      {/* ── Pickup List ── */}
+      {filteredPickups.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon"><Truck size={24} /></div>
           <h3>No pickups found</h3>
@@ -365,12 +455,21 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
-          {filtered.map(p => {
+          {filteredPickups.map(p => {
+            // ──────────────────────────────────────────────────────────────
+            // DONOR RESOLUTION: always use global donors as the source of
+            // truth. Fall back to the snapshot stored in the pickup record.
+            // ──────────────────────────────────────────────────────────────
+            const donor      = donors.find(d => d.id === p.donorId)
+            const donorName  = donor?.name    || p.donorName || 'Unknown Donor'
+            const donorSoc   = donor?.society || p.society   || ''
+            const donorSec   = donor?.sector  || p.sector    || ''
             const isExpanded = expandedId === p.id
             const isOverdue  = p.status === 'Pending' && p.date < today()
 
             return (
               <div key={p.id} className="card" style={{ overflow: 'hidden', borderLeft: isOverdue ? '4px solid var(--danger)' : undefined }}>
+                {/* Summary row */}
                 <div
                   style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', flexWrap: 'nowrap' }}
                   onClick={() => setExpandedId(isExpanded ? null : p.id)}
@@ -379,9 +478,9 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                     <Truck size={15} color="var(--info)" />
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13 }} className="truncate">{p.donorName}</div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }} className="truncate">{donorName}</div>
                     <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }} className="truncate">
-                      {fmtDate(p.date)} · {p.society || p.sector || '—'}
+                      {fmtDate(p.date)} · {donorSoc || donorSec || '—'}
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 5, flexShrink: 0, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -394,6 +493,7 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                   </div>
                 </div>
 
+                {/* Expanded detail */}
                 {isExpanded && (
                   <div style={{ borderTop: '1px solid var(--border-light)', padding: '14px' }}>
                     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: 12.5 }}>
@@ -401,6 +501,13 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                         <div>
                           <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Mode</div>
                           <span className="badge badge-muted" style={{ fontSize: 11 }}>{p.pickupMode}</span>
+                        </div>
+                      )}
+                      {/* Show live donor mobile */}
+                      {(donor?.mobile || p.mobile) && (
+                        <div>
+                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 2 }}>Mobile</div>
+                          <div style={{ fontWeight: 600 }}>{donor?.mobile || p.mobile}</div>
                         </div>
                       )}
                       {p.kabadiwala && (
@@ -443,7 +550,7 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                         <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--info)', textTransform: 'uppercase', marginBottom: 6 }}>SKS Items</div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                           {p.sksItems.map(item => {
-                            const d = p.sksItemDetails?.[item]
+                            const d   = p.sksItemDetails?.[item]
                             const pkg = SKS_PACKAGING_OPTIONS.find(o => o.value === d?.packaging)?.label
                             return (
                               <span key={item} style={{ background: 'var(--info-bg)', color: 'var(--info)', fontSize: 11.5, padding: '3px 10px', borderRadius: 20, fontWeight: 600 }}>
@@ -455,11 +562,13 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                       </div>
                     )}
 
-                    {p.notes && <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 10 }}>{p.notes}</div>}
+                    {p.notes && (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic', marginBottom: 10 }}>{p.notes}</div>
+                    )}
 
                     <div style={{ display: 'flex', gap: 8 }}>
                       <button className="btn btn-outline btn-sm" onClick={() => openModal(p)}><Edit2 size={12} /> Edit</button>
-                      <button className="btn btn-danger btn-sm" onClick={() => remove(p.id)}><Trash2 size={12} /> Delete</button>
+                      <button className="btn btn-danger btn-sm"  onClick={() => remove(p.id)}><Trash2 size={12} /> Delete</button>
                     </div>
                   </div>
                 )}
@@ -480,11 +589,14 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
 
             <div className="modal-body" style={{ maxHeight: '75vh', overflowY: 'auto' }}>
               <div className="form-grid">
-                {/* Donor */}
+
+                {/* ── DONOR SEARCH SELECT ── */}
+                {/* Uses GLOBAL donors from context — shows ALL donors including  */}
+                {/* ones added from PickupScheduler or any other page.           */}
                 <div className="form-group full">
                   <label>Donor <span className="required">*</span></label>
                   <DonorSearchSelect
-                    donors={donors.filter(d => d.status !== 'Lost')}
+                    donors={activeDonors}
                     selectedDonor={selectedDonor}
                     onSelect={(donor) => setField('donorId', donor?.id || '')}
                   />
@@ -543,7 +655,12 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                     Sammaan Ka Saaman Items
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>(count + packaging)</span>
                   </label>
-                  <SKSItemSelector sksItems={form.sksItems} sksItemDetails={form.sksItemDetails} onChangeItems={setSKSItems} onChangeDetail={setSKSDetail} />
+                  <SKSItemSelector
+                    sksItems={form.sksItems}
+                    sksItemDetails={form.sksItemDetails}
+                    onChangeItems={setSKSItems}
+                    onChangeDetail={setSKSDetail}
+                  />
                 </div>
 
                 {/* Payment Section */}
@@ -553,7 +670,6 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                   </label>
                   <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-light)' }}>
                     <div className="form-grid">
-                      {/* Weight */}
                       <div className="form-group full" style={{ margin: 0 }}>
                         <label>Total RST Weight</label>
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -563,26 +679,22 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
                             onChange={e => setField('rstTotalWeight', e.target.value.replace(/[^0-9.]/g, ''))}
                             style={{ width: 100 }}
                           />
-                          <select value={form.rstWeightUnit} onChange={e => setField('rstWeightUnit', e.target.value)}
-                            style={{ minWidth: 70 }}>
+                          <select value={form.rstWeightUnit} onChange={e => setField('rstWeightUnit', e.target.value)} style={{ minWidth: 70 }}>
                             <option value="kg">kg</option>
                             <option value="gm">gm</option>
                           </select>
                         </div>
                       </div>
-                      {/* Total Value */}
                       <div className="form-group" style={{ margin: 0 }}>
-                        <label>Total Value (₹) <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>(Kabadiwala → FP)</span></label>
+                        <label>Total Value (₹) <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 400 }}>(Kab → FP)</span></label>
                         <input type="text" inputMode="numeric" placeholder="0" value={form.totalValue}
                           onChange={e => setField('totalValue', e.target.value.replace(/[^0-9]/g, ''))} />
                       </div>
-                      {/* Amount Paid */}
                       <div className="form-group" style={{ margin: 0 }}>
                         <label>Amount Paid (₹)</label>
                         <input type="text" inputMode="numeric" placeholder="0" value={form.amountPaid}
                           onChange={e => setField('amountPaid', e.target.value.replace(/[^0-9]/g, ''))} />
                       </div>
-                      {/* Payment Status */}
                       <div className="form-group" style={{ margin: 0 }}>
                         <label>Payment Status</label>
                         <select value={form.paymentStatus} onChange={e => setField('paymentStatus', e.target.value)}>
@@ -633,8 +745,11 @@ export default function Pickups({ triggerAddPickup, onAddPickupDone }) {
 
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={closeModal}>Cancel</button>
-              <button className="btn btn-primary" onClick={save}
-                disabled={saving || !form.donorId || !form.date || (form.status === 'Postponed' && !form.postponeReason)}>
+              <button
+                className="btn btn-primary"
+                onClick={save}
+                disabled={saving || !form.donorId || !form.date || (form.status === 'Postponed' && !form.postponeReason)}
+              >
                 {saving ? 'Saving…' : editing ? 'Save Changes' : 'Record Pickup'}
               </button>
             </div>
