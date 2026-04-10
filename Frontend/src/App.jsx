@@ -21,7 +21,7 @@ const PAGES = {
   kabadiwala:      Kabadiwala,
   payments:        Payments,
   pickupscheduler: PickupScheduler,
-  kabadipickups:   KabadiPickups,
+  // kabadipickups:   KabadiPickups,
   // customerpickups: CustomerPickups,
   reports:         Reports,
   raddimaster:     RaddiMaster,
