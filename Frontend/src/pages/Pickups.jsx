@@ -6,7 +6,7 @@ import {
   Search, Plus, X, CheckSquare, Square,
   IndianRupee, MapPin, Phone,
   CheckCircle, Truck, Clock, ChevronDown,
-  AlertCircle, Package,
+  AlertCircle, Package, Weight,
 } from 'lucide-react'
 import { useApp }  from '../context/AppContext'
 import DonorModal  from '../components/DonorModal'
@@ -28,15 +28,15 @@ const EMPTY_FORM = {
   donorId:        '',
   date:           today(),
   pickupMode:     'Individual',
-  // RST
-  rstItems:       [],
-  rstOtherText:   '',        // free-text when "Others" is selected in RST chips
-  rstWeight:      '',
-  rstWeightUnit:  'kg',
+  // RST — per-item weights replace the single rstWeight field
+// RST
+  rstItems:        [],
+  rstOtherText:    '',
+  rstItemWeights:  {},    // { itemName: { value: '', unit: 'kg' } }   // free-text when "Others" is selected in RST chips
   // SKS
   sksItems:       [],
-  sksItemDetails: {},        // { [itemName]: { quantity, packaging } }
-  sksOtherText:   '',        // free-text when "Others" is selected in SKS chips
+  sksItemDetails: {},      // { [itemName]: { quantity, packaging } }
+  sksOtherText:   '',      // free-text when "Others" is selected in SKS chips
   // Payment
   totalValue:     '',
   amountPaid:     '',
@@ -172,8 +172,175 @@ function DonorSearch({ donors, selectedId, onSelect, onAddNew }) {
   )
 }
 
-// ─── Item chip selector ───────────────────────────────────────────────────────
-// When "Others" chip is selected, an inline text box fades in below the chips.
+// ─── RST Item chips with per-item weight inputs ───────────────────────────────
+function RSTItemChips({ items, selected, weights, onToggle, onWeight, otherText, onOtherText }) {
+  const color     = 'var(--primary)'
+  const colorBg   = 'var(--primary-light)'
+  const colorText = 'var(--primary-dark)'
+
+  const totalWeight = selected.reduce((sum, item) => {
+    return sum + (parseFloat(weights[item]) || 0)
+  }, 0)
+
+  const fmt = (n) => n % 1 === 0 ? n.toString() : n.toFixed(2)
+
+  return (
+    <div>
+      {/* Chips grid */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 8px' }}>
+        {items.map(item => {
+          const isOn = selected.includes(item)
+          return (
+            <div key={item} style={{ display: 'flex', alignItems: 'stretch', marginBottom: 2 }}>
+              {/* Item chip button */}
+              <button
+                type="button"
+                onClick={() => onToggle(item)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 10px',
+                  borderRadius: isOn ? '20px 0 0 20px' : 20,
+                  fontSize: 12, cursor: 'pointer',
+                  border: `1.5px solid ${isOn ? color : 'var(--border)'}`,
+                  borderRight: isOn ? 'none' : `1.5px solid ${isOn ? color : 'var(--border)'}`,
+                  background: isOn ? colorBg : 'transparent',
+                  color: isOn ? colorText : 'var(--text-secondary)',
+                  fontWeight: isOn ? 700 : 400,
+                  transition: 'all 0.13s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {isOn ? <CheckSquare size={11} /> : <Square size={11} />}
+                {item}
+              </button>
+
+              {/* Weight input — only when selected */}
+              {isOn && (
+  <div style={{
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '5px 10px 5px 8px',
+    borderRadius: '0 20px 20px 0',
+    border: `1.5px solid ${color}`,
+    borderLeft: 'none',
+    background: colorBg,
+  }}>
+    
+    {/* LEFT INPUT */}
+    <input
+      type="text"
+      inputMode="decimal"
+      value={weights[item]?.value || ''}
+      onChange={e =>
+        onWeight(item, {
+          ...weights[item],
+          value: e.target.value.replace(/[^0-9.]/g, '')
+        })
+      }
+      placeholder="0"
+      style={{
+        width: 40,
+        border: 'none',
+        background: 'transparent',
+        fontSize: 12,
+        fontWeight: 700,
+        outline: 'none',
+        textAlign: 'right',
+      }}
+    />
+
+    {/* RIGHT DROPDOWN */}
+    <select
+      value={weights[item]?.unit || 'kg'}
+      onChange={e =>
+        onWeight(item, {
+          ...weights[item],
+          unit: e.target.value
+        })
+      }
+      style={{
+        fontSize: 11,
+        border: 'none',
+        background: 'transparent',
+        fontWeight: 600,
+        cursor: 'pointer'
+      }}
+    >
+      <option value="kg">kg</option>
+      <option value="gm">gm</option>
+    </select>
+  </div>
+)}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* "Others" free-text */}
+      {selected.includes('Others') && (
+        <div style={{
+          marginTop: 10,
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '9px 13px',
+          background: colorBg,
+          border: `1.5px solid ${color}`,
+          borderRadius: 8,
+          animation: 'expandIn 0.18s ease',
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: colorText, flexShrink: 0, whiteSpace: 'nowrap' }}>
+            Specify:
+          </span>
+          <input
+            type="text"
+            value={otherText}
+            onChange={e => onOtherText(e.target.value)}
+            placeholder="e.g. Broken mirror, Mattress, Old lamp…"
+            autoFocus
+            style={{
+              flex: 1, border: 'none', outline: 'none',
+              background: 'transparent', fontSize: 13,
+              padding: 0, color: 'var(--text-primary)',
+            }}
+          />
+          {otherText && (
+            <button type="button" onClick={() => onOtherText('')}
+              style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 2 }}>
+              <X size={13} />
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Auto-calculated total */}
+      {selected.length > 0 && (
+        <div style={{
+          marginTop: 10, padding: '8px 14px',
+          background: totalWeight > 0 ? 'var(--secondary-light)' : 'var(--bg)',
+          borderRadius: 8,
+          border: `1px solid ${totalWeight > 0 ? 'rgba(27,94,53,0.2)' : 'var(--border-light)'}`,
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 13, transition: 'all 0.2s',
+        }}>
+          <Weight size={14} color={totalWeight > 0 ? 'var(--secondary)' : 'var(--text-muted)'} />
+          <span style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>Total RST Weight:</span>
+          <span style={{
+            fontWeight: 800, fontSize: 15,
+            color: totalWeight > 0 ? 'var(--secondary)' : 'var(--text-muted)',
+            fontFamily: 'var(--font-display)',
+          }}>
+            {totalWeight > 0 ? `${fmt(totalWeight)} kg` : '—'}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>
+            (auto-calculated)
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Item chip selector (SKS only) ───────────────────────────────────────────
 function ItemChips({ items, selected, otherText, color, colorBg, colorText, onChange, onOtherText }) {
   const toggle = (item) => onChange(
     selected.includes(item) ? selected.filter(i => i !== item) : [...selected, item]
@@ -201,7 +368,6 @@ function ItemChips({ items, selected, otherText, color, colorBg, colorText, onCh
         })}
       </div>
 
-      {/* "Others" free-text — animated reveal */}
       {othersOn && (
         <div style={{
           marginTop: 10,
@@ -289,6 +455,111 @@ function SKSDetails({ sksItems, sksItemDetails, onChangeDetail }) {
   )
 }
 
+// ─── RST per-item weight + rate display ──────────────────────────────────────
+function RSTWeightInputs({ rstItems, rstItemWeights, rateChart, onChangeWeight }) {
+  if (rstItems.length === 0) return null
+
+  const toKg = (val, unit) => {
+    const n = parseFloat(val) || 0
+    return unit === 'gm' ? n / 1000 : n
+  }
+
+  return (
+    <div style={{
+      background: 'var(--bg)', borderRadius: 10,
+      border: '1px solid var(--border-light)', overflow: 'hidden', marginTop: 10,
+    }}>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: rateChart ? '1fr 90px 60px 70px 70px' : '1fr 90px 60px',
+        padding: '6px 12px', background: 'var(--primary-light)',
+        fontSize: 10.5, fontWeight: 700, color: 'var(--primary)',
+        textTransform: 'uppercase', letterSpacing: '0.04em',
+      }}>
+        <span>Item</span>
+        <span>Weight</span>
+        <span>Unit</span>
+        {rateChart && <><span>Rate (₹/kg)</span><span>Amount</span></>}
+      </div>
+
+      {rstItems.map((item, idx) => {
+        const det  = rstItemWeights[item] || { value: '', unit: 'kg' }
+        const rate = rateChart?.[item] ?? null
+        const kg   = toKg(det.value, det.unit)
+        const amt  = rate !== null ? Math.round(kg * rate) : null
+
+        return (
+          <div key={item} style={{
+            display: 'grid',
+            gridTemplateColumns: rateChart ? '1fr 90px 60px 70px 70px' : '1fr 90px 60px',
+            padding: '8px 12px', alignItems: 'center',
+            borderTop: idx > 0 ? '1px solid var(--border-light)' : 'none',
+          }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{item}</span>
+            <input
+              type="text" inputMode="decimal" placeholder="0"
+              value={det.value}
+              onChange={e => onChangeWeight(item, { ...det, value: e.target.value.replace(/[^0-9.]/g, '') })}
+              style={{ padding: '5px 8px', fontSize: 13, border: '1.5px solid var(--border)', borderRadius: 6, background: 'var(--surface)', width: '100%' }}
+            />
+            <select
+              value={det.unit}
+              onChange={e => onChangeWeight(item, { ...det, unit: e.target.value })}
+              style={{ marginLeft: 6, padding: '5px 4px', fontSize: 12, border: '1.5px solid var(--border)', borderRadius: 6, background: 'var(--surface)' }}
+            >
+              <option value="kg">kg</option>
+              <option value="gm">gm</option>
+            </select>
+            {rateChart && (
+              <>
+                <span style={{ textAlign: 'center', fontSize: 12.5, color: 'var(--text-muted)', paddingLeft: 8 }}>
+                  {rate !== null ? `₹${rate}` : '—'}
+                </span>
+                <span style={{ textAlign: 'center', fontSize: 12.5, fontWeight: 700, color: amt ? 'var(--secondary)' : 'var(--text-muted)', paddingLeft: 8 }}>
+                  {amt ? `₹${amt}` : '—'}
+                </span>
+              </>
+            )}
+          </div>
+        )
+      })}
+
+      {/* Totals row */}
+      <div style={{
+        padding: '8px 12px', borderTop: '1px solid var(--border-light)',
+        background: 'var(--primary-light)',
+        display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 12.5,
+      }}>
+        {(() => {
+          const totalKg = rstItems.reduce((s, item) => {
+            const det = rstItemWeights[item] || { value: '', unit: 'kg' }
+            const n   = parseFloat(det.value) || 0
+            return s + (det.unit === 'gm' ? n / 1000 : n)
+          }, 0)
+          const totalAmt = rateChart
+            ? rstItems.reduce((s, item) => {
+                const det  = rstItemWeights[item] || { value: '', unit: 'kg' }
+                const kg   = (parseFloat(det.value) || 0) / (det.unit === 'gm' ? 1000 : 1)
+                const rate = rateChart?.[item] ?? 0
+                return s + kg * rate
+              }, 0)
+            : null
+          return (
+            <>
+              <span>Total: <strong>{totalKg.toFixed(3)} kg</strong></span>
+              {totalAmt !== null && (
+                <span style={{ color: 'var(--secondary)', fontWeight: 700 }}>
+                  Est. Value: ₹{Math.round(totalAmt)}
+                </span>
+              )}
+            </>
+          )
+        })()}
+      </div>
+    </div>
+  )
+}
+
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function Toast({ msg, onDone }) {
   useState(() => { const t = setTimeout(onDone, 2800); return () => clearTimeout(t) })
@@ -336,11 +607,23 @@ export default function Pickups() {
 
   const activeDonors  = useMemo(() => donors.filter(d => d.status !== 'Lost'), [donors])
   const selectedDonor = useMemo(() => activeDonors.find(d => d.id === form.donorId) || null, [activeDonors, form.donorId])
-
+  const selectedKabadiwala = useMemo(
+    () => kabadiwalas.find(k => k.name === form.kabadiwala) || null,
+    [kabadiwalas, form.kabadiwala]
+  )
+  const rateChart = selectedKabadiwala?.rateChart || null
+  
   const recentRecords = useMemo(
     () => [...raddiRecords].sort((a, b) => (b.pickupDate || '').localeCompare(a.pickupDate || '')).slice(0, 15),
     [raddiRecords]
   )
+
+  // ── Auto-calculated RST total weight ────────────────────────────────────────
+  const rstTotalWeight = useMemo(() => {
+    return form.rstItems.reduce((sum, item) => {
+      return sum + (parseFloat(form.rstItemWeights[item]) || 0)
+    }, 0)
+  }, [form.rstItems, form.rstItemWeights])
 
   // ── Field setter ────────────────────────────────────────────────────────────
   const set = useCallback((key, val) => {
@@ -355,13 +638,29 @@ export default function Pickups() {
     setErrors(e => ({ ...e, [key]: '' }))
   }, [kabadiwalas])
 
-  // RST items — clear rstOtherText if "Others" deselected
-  const setRST = useCallback((items) =>
-    setForm(f => ({
-      ...f, rstItems: items,
-      rstOtherText: items.includes('Others') ? f.rstOtherText : '',
-    }))
+  // RST items toggle — also cleans up rstItemWeights for deselected items
+const setRST = useCallback((items) =>
+    setForm(f => {
+      const newWeights = {}
+      items.forEach(i => { newWeights[i] = f.rstItemWeights[i] || { value: '', unit: 'kg' } })
+      return {
+        ...f, rstItems: items,
+        rstOtherText:   items.includes('Others') ? f.rstOtherText : '',
+        rstItemWeights: newWeights,
+      }
+    })
   , [])
+
+  // Per-item weight update
+ const updateRstWeight = useCallback((itemName, data) => {
+  setForm(f => ({
+    ...f,
+    rstItemWeights: {
+      ...f.rstItemWeights,
+      [itemName]: data
+    }
+  }))
+}, [])
 
   // SKS items — clear sksOtherText if "Others" deselected
   const setSKS = useCallback((items) =>
@@ -373,6 +672,10 @@ export default function Pickups() {
 
   const setSKSDetail = useCallback((item, detail) =>
     setForm(f => ({ ...f, sksItemDetails: { ...f.sksItemDetails, [item]: detail } }))
+  , [])
+
+  const setRSTWeight = useCallback((item, detail) =>
+    setForm(f => ({ ...f, rstItemWeights: { ...f.rstItemWeights, [item]: detail } }))
   , [])
 
   // ── Add new donor ───────────────────────────────────────────────────────────
@@ -430,9 +733,11 @@ export default function Pickups() {
         rstItems:       finalRST,
         sksItems:       finalSKS,
         sksItemDetails: form.sksItemDetails,
-        rstTotalWeight: form.rstWeight || '',
-        rstWeightUnit:  form.rstWeightUnit,
-        totalKg:        Number(form.rstWeight) || 0,
+        // Per-item weights stored for auditability
+        rstItemWeights: form.rstItemWeights,
+        rstTotalWeight: rstTotalWeight > 0 ? rstTotalWeight.toString() : '',
+        rstWeightUnit:  'kg',
+        totalKg:        rstTotalWeight,
         totalValue,
         amountPaid,
         paymentStatus:  derivePayStatus(totalValue, amountPaid),
@@ -564,40 +869,26 @@ export default function Pickups() {
               </div>
             </div>
 
-            {/* ── RST Items ── */}
+            {/* ── RST Items with per-item weights ── */}
             <div className="form-group" style={{ margin: 0 }}>
               <SectionLabel
                 badge="RST" badgeClass="badge-success"
                 title="Raddi Se Tarakki — Scrap Items"
                 count={form.rstItems.length}
               />
-              <ItemChips
+              <RSTItemChips
                 items={RST_ITEMS}
                 selected={form.rstItems}
+                weights={form.rstItemWeights}
+                onToggle={(item) => setRST(
+                  form.rstItems.includes(item)
+                    ? form.rstItems.filter(i => i !== item)
+                    : [...form.rstItems, item]
+                )}
+                onWeight={updateRstWeight}
                 otherText={form.rstOtherText}
-                color="var(--primary)"
-                colorBg="var(--primary-light)"
-                colorText="var(--primary)"
-                onChange={setRST}
                 onOtherText={v => set('rstOtherText', v)}
               />
-            </div>
-
-            {/* RST Weight */}
-            <div className="form-group" style={{ margin: 0 }}>
-              <label>Total RST Weight</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="text" inputMode="decimal" placeholder="0"
-                  value={form.rstWeight}
-                  onChange={e => set('rstWeight', e.target.value.replace(/[^0-9.]/g, ''))}
-                  style={{ width: 110 }}
-                />
-                <select value={form.rstWeightUnit} onChange={e => set('rstWeightUnit', e.target.value)} style={{ width: 75 }}>
-                  <option value="kg">kg</option>
-                  <option value="gm">gm</option>
-                </select>
-              </div>
             </div>
 
             {/* ── SKS Items ── */}
@@ -617,7 +908,7 @@ export default function Pickups() {
                 onChange={setSKS}
                 onOtherText={v => set('sksOtherText', v)}
               />
-              {/* Quantity + packaging detail table — only when SKS items selected */}
+              {/* Quantity + packaging detail table */}
               <SKSDetails
                 sksItems={form.sksItems}
                 sksItemDetails={form.sksItemDetails}
@@ -746,10 +1037,10 @@ export default function Pickups() {
               {[
                 ['1.', 'Search for the donor by name or mobile.'],
                 ['2.', 'Not found? Click + Add New Donor.'],
-                ['3.', 'Tick RST chips for scrap and SKS chips for goods.'],
-                ['4.', 'Selecting "Others" opens a text box — describe the item.'],
-                ['5.', 'For SKS items, fill in quantity and packaging type.'],
-                ['6.', 'Enter weight, value, and payment received.'],
+                ['3.', 'Tick RST chips — a weight field appears inline for each.'],
+                ['4.', 'Enter kg per item; total auto-calculates below.'],
+                ['5.', 'Tick SKS chips for goods and fill quantity/packaging.'],
+                ['6.', 'Enter value and payment received.'],
                 ['7.', 'Select the kabadiwala, then hit Save.'],
               ].map(([n, t]) => (
                 <div key={n} style={{ display: 'flex', gap: 10, marginBottom: 4 }}>

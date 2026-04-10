@@ -30,9 +30,10 @@ export const pickupStatusColor = (status) => ({
 }[status] || 'badge-muted')
 
 export const paymentStatusColor = (status) => ({
-  'Paid': 'badge-success',
-  'Not Paid': 'badge-danger',
+  'Paid':           'badge-success',
+  'Not Paid':       'badge-danger',
   'Partially Paid': 'badge-warning',
+  'Write Off':      'badge-muted',
 }[status] || 'badge-muted')
 
 export const getDonorHealthStatus = (lastPickup) => {
@@ -55,8 +56,9 @@ export const exportToExcel = (data, filename) => {
 }
 
 export const generateOrderId = () => {
-  const ts = Date.now().toString().slice(-6)
-  return `FP-${ts}`
+  const year = new Date().getFullYear()
+  const seq  = String(Math.floor(1000 + Math.random() * 9000))
+  return `FP-${year}-${seq}`
 }
 
 export const parseWATemplate = (template, donor, pickup) => {

@@ -11,10 +11,10 @@ const PAGE_META = {
   customerpickups: { title: 'Donor Pickup History',   sub: 'Date-wise donor pickup tracker' },
   whatsapp:        { title: 'WhatsApp',               sub: 'Communication templates' },
   reports:         { title: 'Reports',                sub: 'Analytics & insights' },
-  raddimaster:     { title: 'Raddi Master',           sub: 'Complete pickup data — all orders in one view' },  // ← NEW
+  raddimaster:     { title: 'Raddi Master',           sub: 'Complete pickup data — all orders in one view' },
 }
 
-export default function Header({ page, onMenuClick, onAddDonor, onAddPickup }) {
+export default function Header({ page, onMenuClick, onAddDonor }) {
   const meta = PAGE_META[page] || {}
 
   return (
@@ -36,11 +36,6 @@ export default function Header({ page, onMenuClick, onAddDonor, onAddPickup }) {
         {page === 'donors' && (
           <button className="btn btn-primary btn-sm" onClick={onAddDonor}>
             + Add Donor
-          </button>
-        )}
-        {page === 'pickups' && (
-          <button className="btn btn-primary btn-sm" onClick={onAddPickup}>
-            + Record Pickup
           </button>
         )}
         <button className="btn btn-ghost btn-icon" title="Notifications">

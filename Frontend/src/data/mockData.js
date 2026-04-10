@@ -13,9 +13,21 @@ export const SKS_ITEMS = [
   'Adult Shoes', 'Utensils', 'Furniture', 'New Stationery', 'Others',
 ]
 
+// ─── RST Rate Chart Items ─────────────────────────────────────────────────────
+export const RATE_CHART_ITEMS = [
+  'Glass Bottle', 'Glass Other', 'Plastic Bottle / Box', 'Other Plastic',
+  'Paper', 'Cardboard Box', 'Iron', 'E-Waste', 'Wood', 'Others',
+]
+
+const DEFAULT_RATE_CHART = {
+  'Glass Bottle': 2, 'Glass Other': 1, 'Plastic Bottle / Box': 8,
+  'Other Plastic': 5, 'Paper': 12, 'Cardboard Box': 10,
+  'Iron': 25, 'E-Waste': 15, 'Wood': 3, 'Others': 5,
+}
+
 export const DONOR_STATUSES = ['Active', 'Postponed', 'Lost']
 export const PICKUP_STATUSES = ['Completed', 'Postponed', 'Pending', 'Did Not Open Door']
-export const PAYMENT_STATUSES = ['Paid', 'Not Paid', 'Partially Paid']
+export const PAYMENT_STATUSES = ['Paid', 'Not Paid', 'Partially Paid', 'Write Off']
 export const POSTPONE_REASONS = ['Donor unavailable', 'Rescheduled', 'Kabadiwala unavailable', 'Other']
 export const LOST_REASONS = ['Not interested', 'Shifted', 'Society restriction', 'No Raddi', 'Other']
 
@@ -339,6 +351,11 @@ export const kabadiwalas = [
     id: 'K001', name: 'Suresh Bhai', mobile: '9765432100',
     area: 'Sector 22, DLF Phase 1-2, Gurgaon', rating: 4.5, totalPickups: 34,
     totalValue: 8900, amountReceived: 7200, pendingAmount: 1700,
+    rateChart: {
+      'Glass Bottle': 2, 'Glass Other': 1, 'Plastic Bottle / Box': 8,
+      'Other Plastic': 5, 'Paper': 13, 'Cardboard Box': 11,
+      'Iron': 28, 'E-Waste': 16, 'Wood': 3, 'Others': 5,
+    },
     transactions: [
       { date: '2026-03-10', pickupId: 'P001', donor: 'Anjali Sharma', value: 250, paid: 250, status: 'Paid' },
       { date: '2026-02-28', pickupId: 'P003', donor: 'Manoj Singh', value: 0, paid: 0, status: 'Paid' },
@@ -350,6 +367,11 @@ export const kabadiwalas = [
     id: 'K002', name: 'Raju Kabadiwalah', mobile: '9654321009',
     area: 'Noida, Sector 5-20', rating: 4.2, totalPickups: 22,
     totalValue: 5400, amountReceived: 4300, pendingAmount: 1100,
+    rateChart: {
+      'Glass Bottle': 1.5, 'Glass Other': 1, 'Plastic Bottle / Box': 7,
+      'Other Plastic': 4, 'Paper': 11, 'Cardboard Box': 9,
+      'Iron': 24, 'E-Waste': 14, 'Wood': 2.5, 'Others': 4,
+    },
     transactions: [
       { date: '2026-03-01', pickupId: 'P002', donor: 'Ramesh Gupta', value: 180, paid: 100, status: 'Partially Paid' },
       { date: '2026-02-10', pickupId: 'PX03', donor: 'Asha Mehta', value: 210, paid: 210, status: 'Paid' },
@@ -359,6 +381,11 @@ export const kabadiwalas = [
     id: 'K003', name: 'Pappu Ji', mobile: '9543210098',
     area: 'Gurgaon Sector 44-57, DLF Phase 3-5', rating: 3.9, totalPickups: 15,
     totalValue: 3200, amountReceived: 2800, pendingAmount: 400,
+    rateChart: {
+      'Glass Bottle': 1.5, 'Glass Other': 1, 'Plastic Bottle / Box': 6,
+      'Other Plastic': 4, 'Paper': 10, 'Cardboard Box': 8,
+      'Iron': 22, 'E-Waste': 13, 'Wood': 2, 'Others': 4,
+    },
     transactions: [
       { date: '2026-04-18', pickupId: 'P005', donor: 'Pooja Kapoor', value: 0, paid: 0, status: 'Not Paid' },
       { date: '2026-03-05', pickupId: 'PX04', donor: 'Deepak Nair', value: 400, paid: 400, status: 'Paid' },
