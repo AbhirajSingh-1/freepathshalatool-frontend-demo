@@ -1,4 +1,4 @@
-// Frontend/src/pages/Payments.jsx
+// Frontend/src/pages/Payments.jsx — orderId shown on all payment cards
 // Two sections: A) RST Revenue Analytics  B) Kabadiwala Payment Tracking
 import { useState, useMemo } from 'react'
 import {
@@ -8,7 +8,6 @@ import {
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { fmtDate, fmtCurrency, paymentStatusColor, exportToExcel } from '../utils/helpers'
-import { CITIES, CITY_SECTORS } from '../data/mockData'
 import { RADDI_ITEM_LABELS } from '../data/raddiMockData'
 
 const REF_MODES = [
@@ -29,6 +28,24 @@ const calcPayStatus = (total, paid) => {
   return 'Not Paid'
 }
 
+// ── Order ID chip ─────────────────────────────────────────────────────────────
+function OrderIdChip({ orderId, id }) {
+  const display = orderId || id
+  if (!display) return null
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontFamily: 'monospace', fontSize: 10.5, fontWeight: 700,
+      color: 'var(--primary)', background: 'var(--primary-light)',
+      padding: '2px 7px', borderRadius: 5,
+      border: '1px solid rgba(232,82,26,0.2)',
+      whiteSpace: 'nowrap',
+    }}>
+      <Hash size={9} />{display}
+    </span>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // A) RST Revenue Analytics
 // ─────────────────────────────────────────────────────────────────────────────
@@ -36,7 +53,7 @@ function RSTAnalytics({ raddiRecords }) {
   const [datePreset, setDatePreset]   = useState('month')
   const [dateFrom,   setDateFrom]     = useState('')
   const [dateTo,     setDateTo]       = useState('')
-  const [viewType,   setViewType]     = useState('daily')  // 'daily' | 'monthly'
+  const [viewType,   setViewType]     = useState('daily')
   const [filterSector, setFilterSector] = useState('')
 
   const uniqueSectors = useMemo(() => [...new Set(raddiRecords.map(r => r.sector).filter(Boolean))].sort(), [raddiRecords])
@@ -55,7 +72,6 @@ function RSTAnalytics({ raddiRecords }) {
     return matchDate && matchSector && r.orderStatus === 'Completed'
   }), [raddiRecords, dateRange, filterSector])
 
-  // Group by date or month
   const grouped = useMemo(() => {
     const map = {}
     filtered.forEach(r => {
@@ -68,7 +84,6 @@ function RSTAnalytics({ raddiRecords }) {
     return Object.values(map).sort((a, b) => b.key.localeCompare(a.key))
   }, [filtered, viewType])
 
-  // Sector summary
   const sectorSummary = useMemo(() => {
     const map = {}
     filtered.forEach(r => {
@@ -87,7 +102,6 @@ function RSTAnalytics({ raddiRecords }) {
 
   return (
     <div>
-      {/* KPIs */}
       <div className="stat-grid" style={{ marginBottom: 20 }}>
         <div className="stat-card orange">
           <div className="stat-icon" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}><TrendingUp size={18}/></div>
@@ -111,9 +125,7 @@ function RSTAnalytics({ raddiRecords }) {
         </div>
       </div>
 
-      {/* Filters */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16, alignItems: 'flex-end' }}>
-        {/* Date presets */}
         <div style={{ display: 'flex', gap: 6 }}>
           {[['today','Today'],['week','Last 7 Days'],['month','This Month'],['custom','Custom']].map(([v, l]) => (
             <button key={v} className={`btn btn-sm ${datePreset === v ? 'btn-primary' : 'btn-ghost'}`}
@@ -145,7 +157,6 @@ function RSTAnalytics({ raddiRecords }) {
       </div>
 
       <div className="two-col" style={{ marginBottom: 20 }}>
-        {/* Revenue Table */}
         <div className="card">
           <div className="card-header">
             <div className="card-title">{viewType === 'monthly' ? 'Monthly' : 'Daily'} Revenue</div>
@@ -178,7 +189,6 @@ function RSTAnalytics({ raddiRecords }) {
           </div>
         </div>
 
-        {/* Sector Summary */}
         <div className="card">
           <div className="card-header"><div className="card-title">Sector Summary</div></div>
           <div className="table-wrap" style={{ border: 'none', boxShadow: 'none', borderRadius: 0 }}>
@@ -205,7 +215,7 @@ function RSTAnalytics({ raddiRecords }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// B) Kabadiwala Payment Tracking (original logic, now context-driven)
+// B) Kabadiwala Payment Tracking
 // ─────────────────────────────────────────────────────────────────────────────
 function KabadiwalaTracking({ pickups, updatePickup }) {
   const [modal,       setModal]      = useState(null)
@@ -281,7 +291,17 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
           <option value="All">All Payment Status</option>
           <option>Paid</option><option>Not Paid</option><option>Partially Paid</option>
         </select>
-        <button className="btn btn-ghost btn-sm" onClick={() => exportToExcel(filtered.map(p => ({'Pickup ID':p.id,'Donor':p.donorName,'Kabadiwala':p.kabadiwala||'—','Date':p.date,'Total Value (₹)':p.totalValue,'Amount Paid (₹)':p.amountPaid,'Remaining (₹)':(p.totalValue||0)-(p.amountPaid||0),'Payment Status':p.paymentStatus})),'Payments_Report')} style={{ marginLeft:'auto' }}>
+        <button className="btn btn-ghost btn-sm" onClick={() => exportToExcel(filtered.map(p => ({
+          'Order ID': p.orderId || p.id,
+          'Pickup ID': p.id,
+          'Donor': p.donorName,
+          'Kabadiwala': p.kabadiwala || '—',
+          'Date': p.date,
+          'Total Value (₹)': p.totalValue,
+          'Amount Paid (₹)': p.amountPaid,
+          'Remaining (₹)': (p.totalValue||0)-(p.amountPaid||0),
+          'Payment Status': p.paymentStatus,
+        })),'Payments_Report')} style={{ marginLeft:'auto' }}>
           <Download size={13}/> Export
         </button>
       </div>
@@ -297,13 +317,18 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
             return (
               <div key={p.id} className="card" style={{ transition:'box-shadow 0.3s', boxShadow: highlightId===p.id ? '0 0 0 2px var(--secondary)' : undefined }}>
                 <div className="card-body">
-                  <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:12 }}>
+                  {/* Order ID + Donor header */}
+                  <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:10 }}>
                     <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4, flexWrap:'wrap' }}>
+                        <OrderIdChip orderId={p.orderId} id={p.id} />
+                        <span className={`badge ${paymentStatusColor(p.paymentStatus)}`} style={{ fontSize:11 }}>{p.paymentStatus}</span>
+                      </div>
                       <div style={{ fontWeight:700, fontSize:14 }}>{p.donorName}</div>
                       <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>{fmtDate(p.date)} · {p.kabadiwala||'No kabadiwala'}</div>
                     </div>
-                    <span className={`badge ${paymentStatusColor(p.paymentStatus)}`} style={{ flexShrink:0, fontSize:11 }}>{p.paymentStatus}</span>
                   </div>
+
                   <div style={{ display:'flex', gap:8, marginBottom:12 }}>
                     {[{val:fmtCurrency(p.totalValue),label:'Total',bg:'var(--bg)',col:'var(--text-primary)'},{val:fmtCurrency(p.amountPaid||0),label:'Paid',bg:'var(--secondary-light)',col:'var(--secondary)'},{val:rem>0?fmtCurrency(rem):'✓',label:'Due',bg:rem>0?'var(--danger-bg)':'var(--bg)',col:rem>0?'var(--danger)':'var(--text-muted)'}].map(item => (
                       <div key={item.label} style={{ flex:'1 1 80px', background:item.bg, borderRadius:8, padding:'8px 12px', textAlign:'center' }}>
@@ -312,6 +337,7 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
                       </div>
                     ))}
                   </div>
+
                   {p.totalValue > 0 && (
                     <div style={{ marginBottom:12 }}>
                       <div style={{ height:5, background:'var(--border)', borderRadius:3, overflow:'hidden' }}>
@@ -320,6 +346,7 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
                       <div style={{ fontSize:10.5, color:'var(--text-muted)', marginTop:4 }}>{pct}% paid</div>
                     </div>
                   )}
+
                   {lastP?.refValue && (
                     <div style={{ marginBottom:12, padding:'7px 10px', background:'var(--bg)', borderRadius:8, display:'flex', alignItems:'center', gap:8 }}>
                       <Hash size={11} color="var(--text-muted)"/>
@@ -332,6 +359,7 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
                       </button>
                     </div>
                   )}
+
                   <div style={{ display:'flex', gap:8 }}>
                     {(p.payHistory||[]).length > 0 && (
                       <button className="btn btn-ghost btn-sm" onClick={() => setHistModal(p)}>
@@ -359,6 +387,14 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setModal(null)}><X size={16}/></button>
             </div>
             <div className="modal-body">
+              {/* Order ID badge */}
+              {(modal.orderId || modal.id) && (
+                <div style={{ marginBottom:16, display:'flex', alignItems:'center', gap:8 }}>
+                  <span style={{ fontSize:11.5, color:'var(--text-muted)', fontWeight:600 }}>Order:</span>
+                  <OrderIdChip orderId={modal.orderId} id={modal.id} />
+                </div>
+              )}
+
               <div style={{ background:'var(--bg)', borderRadius:10, padding:16, marginBottom:20, display:'flex', gap:16, flexWrap:'wrap' }}>
                 {[{label:'Total Value',val:fmtCurrency(modal.totalValue),col:'var(--text-primary)'},{label:'Already Paid',val:fmtCurrency(modal.amountPaid||0),col:'var(--secondary)'},{label:'Remaining',val:fmtCurrency(prevAmt),col:'var(--danger)'}].map(item => (
                   <div key={item.label} style={{ flex:'1 1 80px' }}>
@@ -429,6 +465,14 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setHistModal(null)}><X size={16}/></button>
             </div>
             <div className="modal-body">
+              {/* Order ID in history modal */}
+              {(histModal.orderId || histModal.id) && (
+                <div style={{ marginBottom:12, display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:11.5, color:'var(--text-muted)' }}>Order:</span>
+                  <OrderIdChip orderId={histModal.orderId} id={histModal.id} />
+                </div>
+              )}
+
               {(histModal.payHistory||[]).length === 0 ? (
                 <div className="empty-state" style={{ padding:32 }}><p>No payment history yet.</p></div>
               ) : [...(histModal.payHistory||[])].reverse().map((h, i, arr) => {
@@ -474,11 +518,10 @@ function KabadiwalaTracking({ pickups, updatePickup }) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Payments() {
   const { pickups, raddiRecords, updatePickup } = useApp()
-  const [view, setView] = useState('analytics') // 'analytics' | 'kabadiwala'
+  const [view, setView] = useState('analytics')
 
   return (
     <div className="page-body">
-      {/* View Switcher */}
       <div style={{ marginBottom: 24 }}>
         <div className="tabs" style={{ marginBottom: 0 }}>
           <button className={`tab ${view === 'analytics' ? 'active' : ''}`} onClick={() => setView('analytics')}>

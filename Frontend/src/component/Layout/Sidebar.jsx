@@ -19,7 +19,7 @@ const NAV = [
   // { id: 'customerpickups',  label: 'Donor Pickup History', icon: PackageSearch },
   { section: 'Insights' },
   { id: 'reports',          label: 'Reports',              icon: BarChart3 },
-  { id: 'raddimaster',      label: 'Raddi Master',         icon: Table2 },   // ← NEW
+  // { id: 'raddimaster',      label: 'Raddi Master',         icon: Table2 },   // ← NEW
 ]
 
 export default function Sidebar({ active, onNav, open, onClose, overdueCount, onLogoClick }) {

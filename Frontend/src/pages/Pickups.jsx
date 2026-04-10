@@ -7,11 +7,12 @@ import {
   IndianRupee, MapPin, Phone,
   CheckCircle, Truck, Clock,
   AlertCircle, Package, Weight, Hash, UserCheck, ChevronDown,
+  History,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import DonorModal from '../components/DonorModal'
 import { RST_ITEMS, SKS_ITEMS, PICKUP_MODES } from '../data/mockData'
-import { fmtDate, fmtCurrency, generateOrderId } from '../utils/helpers'
+import { fmtDate, fmtCurrency, generateOrderId, pickupStatusColor, paymentStatusColor } from '../utils/helpers'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -163,9 +164,8 @@ function KabadiwalaSearch({ kabadiwalas, value, onChange }) {
 
   return (
     <div ref={rootRef} style={{ position: 'relative' }}>
-      {/* Trigger */}
       <div
-        onClick={() => { setOpen(o => !o); }}
+        onClick={() => setOpen(o => !o)}
         style={{
           display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px',
           border: `1.5px solid ${open ? 'var(--secondary)' : selected ? 'var(--secondary)' : 'var(--border)'}`,
@@ -199,14 +199,12 @@ function KabadiwalaSearch({ kabadiwalas, value, onChange }) {
         )}
       </div>
 
-      {/* Dropdown */}
       {open && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 80,
           background: 'var(--surface)', border: '1px solid var(--border)',
           borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-md)', overflow: 'hidden',
         }}>
-          {/* Search input inside dropdown */}
           <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border-light)', position: 'relative' }}>
             <Search size={13} style={{ position: 'absolute', left: 22, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
             <input
@@ -218,7 +216,6 @@ function KabadiwalaSearch({ kabadiwalas, value, onChange }) {
             />
           </div>
 
-          {/* None option */}
           <div
             onMouseDown={() => { onChange(''); setOpen(false); setQuery('') }}
             style={{
@@ -249,7 +246,6 @@ function KabadiwalaSearch({ kabadiwalas, value, onChange }) {
                 onMouseEnter={e => { if (k.name !== value) e.currentTarget.style.background = 'var(--bg)' }}
                 onMouseLeave={e => { e.currentTarget.style.background = k.name === value ? 'var(--secondary-light)' : 'transparent' }}
               >
-                {/* Avatar */}
                 <div style={{
                   width: 36, height: 36, borderRadius: 10, flexShrink: 0,
                   background: 'var(--secondary-light)', display: 'flex', alignItems: 'center',
@@ -263,7 +259,6 @@ function KabadiwalaSearch({ kabadiwalas, value, onChange }) {
                     <span>{k.mobile}</span>
                     {k.area && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>· {k.area}</span>}
                   </div>
-                  {/* Rate chart preview pills */}
                   {k.rateChart && (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
                       {Object.entries(k.rateChart).filter(([, v]) => v > 0).slice(0, 4).map(([item, rate]) => (
@@ -293,7 +288,7 @@ function KabadiwalaSearch({ kabadiwalas, value, onChange }) {
   )
 }
 
-// ─── RST Item Chips — checkboxes on top, weight list below ───────────────────
+// ─── RST Item Chips ───────────────────────────────────────────────────────────
 function RSTItemChips({ items, selected, weights, onToggle, onWeight, otherText, onOtherText }) {
   const fmt = (n) => n % 1 === 0 ? n.toString() : n.toFixed(3)
   const totalWeight = selected.reduce((sum, item) => sum + toKg(weights[item]?.value, weights[item]?.unit || 'kg'), 0)
@@ -522,9 +517,141 @@ function PayStatusBadge({ status }) {
   return <span className={`badge ${map[status] || 'badge-muted'}`} style={{ fontSize: 11 }}>{status}</span>
 }
 
+// ─── Donor Pickup History Panel ───────────────────────────────────────────────
+function DonorPickupHistory({ donor, pickups }) {
+  if (!donor) {
+    return (
+      <div className="card">
+        <div className="card-header">
+          <History size={15} color="var(--text-muted)" />
+          <div className="card-title" style={{ fontSize: 13.5, color: 'var(--text-muted)' }}>Donor Pickup History</div>
+        </div>
+        <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          Select a donor above to see their pickup history.
+        </div>
+      </div>
+    )
+  }
+
+  const history = [...pickups]
+    .filter(p => p.donorId === donor.id)
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+
+  return (
+    <div className="card">
+      <div className="card-header">
+        <History size={15} color="var(--primary)" />
+        <div className="card-title" style={{ fontSize: 13.5 }}>
+          {donor.name}'s Pickups
+        </div>
+        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+          {history.length} record{history.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+
+      {/* Donor quick stats */}
+      <div style={{
+        display: 'flex', gap: 0, borderBottom: '1px solid var(--border-light)',
+        background: 'var(--secondary-light)',
+      }}>
+        {[
+          { label: 'Total RST', value: fmtCurrency(donor.totalRST || 0), color: 'var(--secondary)' },
+          { label: 'SKS Pickups', value: donor.totalSKS || 0, color: 'var(--info)' },
+          { label: 'Last Pickup', value: donor.lastPickup ? fmtDate(donor.lastPickup) : '—', color: 'var(--text-primary)' },
+        ].map((s, i) => (
+          <div key={i} style={{
+            flex: 1, padding: '8px 4px', textAlign: 'center',
+            borderRight: i < 2 ? '1px solid rgba(27,94,53,0.15)' : 'none',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 12.5, color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: 9.5, color: 'var(--secondary)', textTransform: 'uppercase', opacity: 0.7 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {history.length === 0 ? (
+        <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+          No pickups recorded for this donor yet.
+        </div>
+      ) : (
+        <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+          {history.map((p, i) => (
+            <div key={p.id} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px',
+              borderBottom: i < history.length - 1 ? '1px solid var(--border-light)' : 'none',
+              background: p.status === 'Completed' ? 'transparent' : 'var(--bg)',
+            }}>
+              {/* Status dot */}
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%', flexShrink: 0, marginTop: 5,
+                background: p.status === 'Completed' ? 'var(--secondary)'
+                  : p.status === 'Pending' ? 'var(--info)'
+                  : p.status === 'Postponed' ? 'var(--warning)'
+                  : 'var(--danger)',
+              }} />
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Order ID + date row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                  {(p.orderId || p.id) && (
+                    <span style={{
+                      fontFamily: 'monospace', fontSize: 10.5, fontWeight: 700,
+                      color: 'var(--primary)', background: 'var(--primary-light)',
+                      padding: '1px 6px', borderRadius: 4,
+                      border: '1px solid rgba(232,82,26,0.2)',
+                    }}>
+                      <Hash size={9} style={{ verticalAlign: 'middle', marginRight: 2 }} />
+                      {p.orderId || p.id}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+                    {fmtDate(p.date)}
+                  </span>
+                  <span className={`badge ${p.status === 'Completed' ? 'badge-success' : p.status === 'Pending' ? 'badge-info' : p.status === 'Postponed' ? 'badge-warning' : 'badge-danger'}`} style={{ fontSize: 9.5 }}>
+                    {p.status}
+                  </span>
+                </div>
+
+                {/* Type + items */}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {p.type && (
+                    <span className={`badge ${p.type === 'RST' ? 'badge-success' : p.type === 'SKS' ? 'badge-info' : 'badge-warning'}`} style={{ fontSize: 9.5 }}>
+                      {p.type}
+                    </span>
+                  )}
+                  {p.pickupMode && (
+                    <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{p.pickupMode}</span>
+                  )}
+                  {p.kabadiwala && (
+                    <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>· {p.kabadiwala}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Amount + payment status */}
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                {p.totalValue > 0 ? (
+                  <div style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--primary)' }}>
+                    {fmtCurrency(p.totalValue)}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</div>
+                )}
+                <span className={`badge ${p.paymentStatus === 'Paid' ? 'badge-success' : p.paymentStatus === 'Partially Paid' ? 'badge-warning' : 'badge-danger'}`} style={{ fontSize: 9 }}>
+                  {p.paymentStatus}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 export default function Pickups() {
-  const { donors, kabadiwalas, raddiRecords, addDonor, createPickup } = useApp()
+  const { donors, kabadiwalas, pickups, raddiRecords, addDonor, createPickup } = useApp()
 
   const [form,       setForm]       = useState(EMPTY_FORM)
   const [saving,     setSaving]     = useState(false)
@@ -536,11 +663,6 @@ export default function Pickups() {
   const selectedDonor = useMemo(() => activeDonors.find(d => d.id === form.donorId) || null, [activeDonors, form.donorId])
   const selectedKab   = useMemo(() => kabadiwalas.find(k => k.name === form.kabadiwala) || null, [kabadiwalas, form.kabadiwala])
   const rateChart     = selectedKab?.rateChart || null
-
-  const recentRecords = useMemo(
-    () => [...raddiRecords].sort((a, b) => (b.pickupDate || '').localeCompare(a.pickupDate || '')).slice(0, 15),
-    [raddiRecords]
-  )
 
   const rstTotalWeight = useMemo(() =>
     form.rstItems.reduce((sum, item) => {
@@ -689,11 +811,16 @@ export default function Pickups() {
             </div>
 
             {selectedDonor && (
-              <div style={{ padding: '9px 13px', background: 'var(--secondary-light)', borderRadius: 8, fontSize: 12.5, color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ padding: '9px 13px', background: 'var(--secondary-light)', borderRadius: 8, fontSize: 12.5, color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <MapPin size={13} style={{ flexShrink: 0 }} />
-                {[selectedDonor.society, selectedDonor.sector, selectedDonor.city].filter(Boolean).join(', ')}
+                <span>{[selectedDonor.society, selectedDonor.sector, selectedDonor.city].filter(Boolean).join(', ')}</span>
+                {selectedDonor.id && (
+                  <span style={{ marginLeft: 'auto', fontFamily: 'monospace', fontSize: 10.5, color: 'var(--secondary)', opacity: 0.7, display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <Hash size={9} />{selectedDonor.id}
+                  </span>
+                )}
                 {selectedDonor.mobile && (
-                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
                     <Phone size={11} /> {selectedDonor.mobile}
                   </span>
                 )}
@@ -719,7 +846,7 @@ export default function Pickups() {
               </div>
             </div>
 
-            {/* ─── 3. KABADIWALA (moved here — before RST) ─── */}
+            {/* 3. Kabadiwala */}
             <div className="form-group" style={{ margin: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <UserCheck size={13} color="var(--secondary)" />
@@ -746,7 +873,7 @@ export default function Pickups() {
               )}
             </div>
 
-            {/* ─── 4. RST Items ─── */}
+            {/* 4. RST Items */}
             <div className="form-group" style={{ margin: 0 }}>
               <SectionLabel badge="RST" badgeClass="badge-success" title="Raddi Se Tarakki — Scrap Items" count={form.rstItems.length} />
               <RSTItemChips
@@ -841,7 +968,7 @@ export default function Pickups() {
           </div>
         </div>
 
-        {/* ── RIGHT: guide + recent ── */}
+        {/* ── RIGHT: guide + donor history ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="card">
             <div className="card-header">
@@ -866,44 +993,8 @@ export default function Pickups() {
             </div>
           </div>
 
-          <div className="card">
-            <div className="card-header">
-              <Truck size={15} color="var(--secondary)" />
-              <div className="card-title" style={{ fontSize: 13.5 }}>Recent Recordings</div>
-              <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginLeft: 'auto' }}>Last {Math.min(recentRecords.length, 15)}</span>
-            </div>
-            <div style={{ padding: '4px 0' }}>
-              {recentRecords.length === 0 ? (
-                <div className="empty-state" style={{ padding: 28 }}>
-                  <div className="empty-icon"><Truck size={20} /></div>
-                  <p style={{ fontSize: 12.5 }}>No recordings yet.</p>
-                </div>
-              ) : recentRecords.map((r, i) => (
-                <div key={r.orderId || i} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 14px', borderBottom: i < recentRecords.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                  <div style={{ width: 30, height: 30, borderRadius: 8, flexShrink: 0, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: 'var(--primary)', fontSize: 13 }}>
-                    {(r.name || '?')[0]}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 12.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      {r.orderId && <><Hash size={9} />{r.orderId} · </>}
-                      {fmtDate(r.pickupDate)}{r.totalKg > 0 ? ` · ${r.totalKg} kg` : ''}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    {r.totalAmount > 0 ? (
-                      <div style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--primary)' }}>{fmtCurrency(r.totalAmount)}</div>
-                    ) : (
-                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>—</div>
-                    )}
-                    <div style={{ fontSize: 10, fontWeight: 600, color: r.paymentStatus === 'Received' ? 'var(--secondary)' : r.paymentStatus === 'Yet to Receive' ? '#92400E' : 'var(--danger)' }}>
-                      {r.paymentStatus}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          {/* ── Donor Pickup History (replaces Recent Recordings) ── */}
+          <DonorPickupHistory donor={selectedDonor} pickups={pickups} />
         </div>
       </div>
 

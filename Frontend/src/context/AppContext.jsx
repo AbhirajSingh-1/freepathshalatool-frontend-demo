@@ -1,15 +1,11 @@
 // Frontend/src/context/AppContext.jsx
 // ─── Single Source of Truth — ALL pages must read/write ONLY through here ────
-//
-// ARCHITECTURE RULE:
-//   Components NEVER call api.js fetchDonors() / fetchPickups() etc.
-//   They call context actions only.
-//   When the real backend is ready, replace delay() stubs with fetch().
 
 import {
   createContext, useContext, useState,
   useCallback, useMemo,
 } from 'react'
+import { generateOrderId } from '../utils/helpers'
 
 import {
   donors      as _initDonors,
@@ -58,7 +54,8 @@ function buildRaddiRow({ pickup, donor = {}, kabObj = {}, data = {} }) {
   const raddiPS       = ps === 'Paid' ? 'Received' : 'Yet to Receive'
 
   return {
-    orderId:         pickup.id,
+    orderId:         pickup.orderId || pickup.id,   // ← prefer human-readable orderId
+    pickupId:        pickup.id,                      // ← keep internal id for linking
     mobile:          donor.mobile  || pickup.mobile  || '',
     name:            donor.name    || pickup.donorName || '',
     houseNo:         donor.house   || pickup.houseNo  || '',
@@ -110,7 +107,7 @@ export function AppProvider({ children }) {
       nextPickup: null,
     }
     setDonors(prev => [donor, ...prev])
-    return donor   // ← caller (PickupScheduler) uses this to auto-select
+    return donor
   }, [])
 
   /** Patch fields on an existing donor. */
@@ -129,11 +126,7 @@ export function AppProvider({ children }) {
 
   /**
    * createPickup  ←  used by Pickups.jsx "Record Pickup" modal
-   *
    * Accepts any status (Pending / Completed / Postponed …).
-   * Stores BOTH donorId (for reliable back-linking) AND a snapshot of
-   * donorName/society/sector (for display without a join when needed).
-   * If status === 'Completed', also creates a Raddi Master row.
    */
   const createPickup = useCallback(async (data) => {
     await delay()
@@ -142,6 +135,7 @@ export function AppProvider({ children }) {
     const pickup = {
       ...data,
       id:            uid('FP'),
+      orderId:       data.orderId || generateOrderId(), // ← ensure orderId exists
       paymentStatus,
       rstItems:      data.rstItems  || [],
       sksItems:      data.sksItems  || [],
@@ -176,6 +170,7 @@ export function AppProvider({ children }) {
     const pickup = {
       ...data,
       id:            uid('SC'),
+      orderId:       generateOrderId(), // ← generate human-readable order ID
       status:        'Pending',
       totalValue:    0,
       amountPaid:    0,
@@ -198,7 +193,6 @@ export function AppProvider({ children }) {
 
   /**
    * recordPickup  ←  marks an existing Pending pickup as Completed.
-   * Atomically: updates pickup + Raddi Master + donor stats + kabadiwala ledger.
    */
   const recordPickup = useCallback(async (id, data) => {
     await delay()
@@ -214,7 +208,7 @@ export function AppProvider({ children }) {
           const kabObj = prevK.find(k => k.name === data.kabadiwala) || {}
           const row    = buildRaddiRow({ pickup, donor, kabObj, data: { ...data, paymentStatus } })
           setRaddi(prev => {
-            const idx = prev.findIndex(r => r.orderId === id)
+            const idx = prev.findIndex(r => r.pickupId === id || r.orderId === (pickup.orderId || id))
             return idx >= 0 ? prev.map((r, i) => i === idx ? row : r) : [row, ...prev]
           })
           return prevP
@@ -249,7 +243,6 @@ export function AppProvider({ children }) {
 
   /**
    * updatePickup  ←  patch any existing pickup (edit modal, payment update).
-   * Auto-derives paymentStatus and syncs Raddi Master column.
    */
   const updatePickup = useCallback(async (id, data) => {
     await delay()
@@ -263,7 +256,7 @@ export function AppProvider({ children }) {
     if (paymentStatus) {
       const raddiPS = paymentStatus === 'Paid' ? 'Received' : 'Yet to Receive'
       setRaddi(prev => prev.map(r =>
-        r.orderId === id
+        r.pickupId === id || r.orderId === id
           ? { ...r, paymentStatus: raddiPS, totalAmount: Number(data.totalValue) ?? r.totalAmount }
           : r
       ))
@@ -274,7 +267,7 @@ export function AppProvider({ children }) {
   const deletePickup = useCallback(async (id) => {
     await delay()
     setPickups(prev => prev.filter(p => p.id !== id))
-    setRaddi(prev => prev.filter(r => r.orderId !== id))
+    setRaddi(prev => prev.filter(r => r.pickupId !== id && r.orderId !== id))
   }, [])
 
   // ── KABADIWALA CRUD ───────────────────────────────────────────────────────
@@ -331,11 +324,18 @@ export function AppProvider({ children }) {
     pickups.forEach(p => {
       if (p.status !== 'Pending') return
       const entry = {
-        id: p.id, donorId: p.donorId, donorName: p.donorName || '',
-        mobile: p.mobile || '', society: p.society || '',
-        sector: p.sector || '', city: p.city || '',
-        scheduledDate: p.date || '', timeSlot: p.timeSlot || '',
-        notes: p.notes || '', pickupMode: p.pickupMode || 'Individual',
+        id:          p.id,
+        orderId:     p.orderId || p.id,   // ← include orderId in tab entries
+        donorId:     p.donorId,
+        donorName:   p.donorName || '',
+        mobile:      p.mobile || '',
+        society:     p.society || '',
+        sector:      p.sector || '',
+        city:        p.city || '',
+        scheduledDate: p.date || '',
+        timeSlot:    p.timeSlot || '',
+        notes:       p.notes || '',
+        pickupMode:  p.pickupMode || 'Individual',
       }
       if (p.date && p.date < todayStr) {
         overdue.push({ ...entry, daysOverdue: Math.floor((now - new Date(p.date + 'T00:00:00')) / 86_400_000) })
@@ -395,10 +395,10 @@ export function AppProvider({ children }) {
     deleteDonor,
 
     // ── Pickup actions
-    createPickup,        // Pickups page  →  any status
-    schedulePickup,      // PickupScheduler page  →  always Pending
-    recordPickup,        // mark Pending → Completed
-    updatePickup,        // edit / payment patch
+    createPickup,
+    schedulePickup,
+    recordPickup,
+    updatePickup,
     deletePickup,
 
     // ── Kabadiwala actions

@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   Search, Plus, Edit2, Trash2, X, Phone, MapPin,
   AlertTriangle, SlidersHorizontal, Clock, CheckCircle,
-  AlertCircle, UserX,
+  AlertCircle, UserX, Hash,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -65,11 +65,10 @@ const SEGMENTS = [
   },
 ]
 
-// ── Derive segment from lastPickup date ───────────────────────────────────────
 function getSegment(donor) {
   if (donor.status === 'Lost')      return 'Lost'
   if (donor.status === 'Postponed') return 'Postponed'
-  if (!donor.lastPickup)            return 'Active'   // new donor, no pickup yet
+  if (!donor.lastPickup)            return 'Active'
   const days = differenceInDays(new Date(), parseISO(donor.lastPickup))
   if (days <= 30)  return 'Active'
   if (days <= 45)  return 'Pickup Due'
@@ -88,7 +87,6 @@ const EMPTY_FORM = {
   lostReason: '', notes: '',
 }
 
-// ── Segment badge chip ────────────────────────────────────────────────────────
 function SegmentChip({ segId }) {
   const seg = SEGMENTS.find(s => s.id === segId)
   if (!seg || segId === 'all') return null
@@ -104,7 +102,6 @@ function SegmentChip({ segId }) {
   )
 }
 
-// ── Days since badge ──────────────────────────────────────────────────────────
 function DaysSinceBadge({ lastPickup }) {
   const days = daysSince(lastPickup)
   if (days === null) return <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No pickup yet</span>
@@ -115,6 +112,21 @@ function DaysSinceBadge({ lastPickup }) {
   return (
     <span style={{ fontSize: 11, color, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>
       <Clock size={10} />{days}d ago
+    </span>
+  )
+}
+
+// ── Donor ID badge ────────────────────────────────────────────────────────────
+function DonorIdBadge({ id }) {
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontSize: 10, fontFamily: 'monospace', fontWeight: 600,
+      color: 'var(--text-muted)', background: 'var(--border-light)',
+      padding: '1px 6px', borderRadius: 4,
+      border: '1px solid var(--border)',
+    }}>
+      <Hash size={9} />{id}
     </span>
   )
 }
@@ -143,7 +155,6 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
     ...donors.map(d => d.society).filter(Boolean),
   ])].sort(), [donors])
 
-  // ── Segment counts ────────────────────────────────────────────────────────
   const segCounts = useMemo(() => {
     const counts = { all: donors.length }
     donors.forEach(d => {
@@ -153,13 +164,12 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
     return counts
   }, [donors])
 
-  // ── Filtered donors ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     return donors.filter(d => {
       const seg = getSegment(d)
       const matchSeg    = activeSeg === 'all' || seg === activeSeg
-      const matchQ      = !q || d.name.toLowerCase().includes(q) || d.mobile.includes(q) || d.society?.toLowerCase().includes(q)
+      const matchQ      = !q || d.name.toLowerCase().includes(q) || d.mobile.includes(q) || d.society?.toLowerCase().includes(q) || d.id?.toLowerCase().includes(q)
       const matchCity   = !filterCity   || d.city === filterCity
       const matchSector = !filterSector || d.sector === filterSector
       const matchSoc    = !filterSociety || d.society === filterSociety
@@ -169,7 +179,6 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
 
   const hasFilters = filterCity || filterSector || filterSociety
 
-  // ── Modal helpers ─────────────────────────────────────────────────────────
   const openModal = (donor = null) => {
     setEditing(donor)
     setForm(donor ? { ...EMPTY_FORM, ...donor } : EMPTY_FORM)
@@ -197,7 +206,6 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
     deleteDonor(id)
   }
 
-  // ── Segment advisory text ─────────────────────────────────────────────────
   const getAdvisory = (seg) => ({
     'Pickup Due': { text: 'Schedule a pickup soon', bg: 'var(--info-bg)', color: 'var(--info)' },
     'At Risk':    { text: 'Overdue — reach out now', bg: 'var(--warning-bg)', color: '#92400E' },
@@ -261,7 +269,7 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
           <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
             <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
             <input
-              placeholder="Search name, mobile, society…"
+              placeholder="Search name, mobile, society, donor ID…"
               value={search}
               onChange={e => setSearch(e.target.value)}
               style={{ paddingLeft: 32, fontSize: 13, width: '100%' }}
@@ -323,16 +331,10 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
             background: seg.bg, border: `1px solid ${seg.borderColor}33`,
           }}>
             {Icon && <Icon size={15} color={seg.color} />}
-            <span style={{ fontSize: 13, fontWeight: 700, color: seg.color }}>
-              {seg.label}
-            </span>
-            <span style={{ fontSize: 12.5, color: seg.color, opacity: 0.8 }}>
-              — {seg.description}
-            </span>
-            <button
-              onClick={() => setActiveSeg('all')}
-              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: seg.color, display: 'flex', padding: 2 }}
-            >
+            <span style={{ fontSize: 13, fontWeight: 700, color: seg.color }}>{seg.label}</span>
+            <span style={{ fontSize: 12.5, color: seg.color, opacity: 0.8 }}>— {seg.description}</span>
+            <button onClick={() => setActiveSeg('all')}
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: seg.color, display: 'flex', padding: 2 }}>
               <X size={14} />
             </button>
           </div>
@@ -379,6 +381,7 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
                   <div style={{ flex: '1 1 0', minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <div style={{ fontWeight: 700, fontSize: 14 }} className="truncate">{d.name}</div>
+                      <DonorIdBadge id={d.id} />
                       <SegmentChip segId={seg} />
                       <DaysSinceBadge lastPickup={d.lastPickup} />
                     </div>
@@ -406,8 +409,8 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
                 <div style={{ display: 'flex', gap: 0, borderTop: '1px solid var(--border-light)', background: 'var(--bg)' }}>
                   {[
                     {
-                      label: 'Health',
-                      value: <SegmentChip segId={seg} />,
+                      label: 'Donor ID',
+                      value: <span style={{ fontFamily: 'monospace', fontSize: 10.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 2 }}><Hash size={9} />{d.id}</span>,
                     },
                     {
                       label: 'RST',
@@ -467,6 +470,11 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
           <div className="modal" style={{ maxWidth: 600, width: '95vw' }}>
             <div className="modal-header">
               <div className="modal-title">{editing ? 'Edit Donor' : 'Add New Donor'}</div>
+              {editing && (
+                <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)', background: 'var(--border-light)', padding: '2px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
+                  <Hash size={10} />{editing.id}
+                </span>
+              )}
               <button className="btn btn-ghost btn-icon btn-sm" onClick={closeModal}><X size={16} /></button>
             </div>
             <div className="modal-body" style={{ maxHeight: '70vh', overflowY: 'auto' }}>

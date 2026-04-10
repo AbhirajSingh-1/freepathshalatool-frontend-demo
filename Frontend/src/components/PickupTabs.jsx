@@ -1,4 +1,4 @@
-import { AlertTriangle, Calendar, Clock, UserX } from 'lucide-react'
+import { AlertTriangle, Calendar, Clock, UserX, Hash } from 'lucide-react'
 import { fmtDate } from '../utils/helpers'
 
 const TABS = [
@@ -7,6 +7,23 @@ const TABS = [
   { id: 'atRisk',    label: 'At Risk Schedules',  icon: Clock,         color: 'var(--warning)',   bg: 'var(--warning-bg)' },
   { id: 'churned',   label: 'Churned Pickups',    icon: UserX,         color: 'var(--text-muted)', bg: 'var(--border-light)' },
 ]
+
+// ── Order ID chip ─────────────────────────────────────────────────────────────
+function OrderIdChip({ orderId }) {
+  if (!orderId) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 3,
+      fontFamily: 'monospace', fontSize: 10.5, fontWeight: 600,
+      color: 'var(--primary)', background: 'var(--primary-light)',
+      padding: '2px 7px', borderRadius: 5,
+      border: '1px solid rgba(232,82,26,0.2)',
+      whiteSpace: 'nowrap',
+    }}>
+      <Hash size={9} />{orderId}
+    </span>
+  )
+}
 
 // ── Overdue table ────────────────────────────────────────────────────────────
 function OverdueTable({ data }) {
@@ -21,6 +38,7 @@ function OverdueTable({ data }) {
         <table>
           <thead>
             <tr>
+              <th>Order ID</th>
               <th>Donor</th>
               <th>Location</th>
               <th>Scheduled Date</th>
@@ -32,6 +50,7 @@ function OverdueTable({ data }) {
           <tbody>
             {data.map(p => (
               <tr key={p.id}>
+                <td><OrderIdChip orderId={p.orderId} /></td>
                 <td>
                   <div style={{ fontWeight: 700 }}>{p.donorName}</div>
                   <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{p.mobile}</div>
@@ -75,6 +94,7 @@ function ScheduledTable({ data }) {
         <table>
           <thead>
             <tr>
+              <th>Order ID</th>
               <th>Donor</th>
               <th>Location</th>
               <th>Pickup Date</th>
@@ -85,6 +105,7 @@ function ScheduledTable({ data }) {
           <tbody>
             {data.map(p => (
               <tr key={p.id}>
+                <td><OrderIdChip orderId={p.orderId} /></td>
                 <td>
                   <div style={{ fontWeight: 700 }}>{p.donorName}</div>
                   <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{p.mobile}</div>
@@ -237,6 +258,13 @@ function MobileCard({ p, badge }) {
         </div>
         {badge}
       </div>
+      {p.orderId && (
+        <div style={{ marginBottom: 6 }}>
+          <span style={{ fontFamily: 'monospace', fontSize: 10.5, color: 'var(--primary)', background: 'var(--primary-light)', padding: '1px 6px', borderRadius: 4 }}>
+            <Hash size={9} style={{ verticalAlign: 'middle', marginRight: 2 }} />{p.orderId}
+          </span>
+        </div>
+      )}
       <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
         {p.society}, {p.sector}
       </div>
@@ -266,12 +294,7 @@ export default function PickupTabs({ activeTab, onTabChange, data, loading }) {
   return (
     <div>
       {/* ── Tab Toggle Buttons ── */}
-      <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 20,
-      }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
         {TABS.map(tab => {
           const Icon    = tab.icon
           const isActive = activeTab === tab.id
@@ -281,18 +304,13 @@ export default function PickupTabs({ activeTab, onTabChange, data, loading }) {
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: '9px 18px',
-                borderRadius: 'var(--radius-sm)',
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '9px 18px', borderRadius: 'var(--radius-sm)',
                 border: `1.5px solid ${isActive ? tab.color : 'var(--border)'}`,
                 background: isActive ? tab.bg : 'var(--surface)',
                 color: isActive ? tab.color : 'var(--text-muted)',
-                fontWeight: isActive ? 700 : 500,
-                fontSize: 13,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
+                fontWeight: isActive ? 700 : 500, fontSize: 13,
+                cursor: 'pointer', transition: 'all 0.15s',
                 fontFamily: 'var(--font-body)',
               }}
             >
@@ -302,12 +320,9 @@ export default function PickupTabs({ activeTab, onTabChange, data, loading }) {
                 <span style={{
                   background: isActive ? tab.color : 'var(--border)',
                   color: isActive ? 'white' : 'var(--text-muted)',
-                  fontSize: 10.5,
-                  fontWeight: 700,
-                  padding: '1px 7px',
-                  borderRadius: 20,
-                  minWidth: 20,
-                  textAlign: 'center',
+                  fontSize: 10.5, fontWeight: 700,
+                  padding: '1px 7px', borderRadius: 20,
+                  minWidth: 20, textAlign: 'center',
                 }}>
                   {count}
                 </span>
@@ -338,8 +353,7 @@ function SkeletonTable() {
     <div>
       {[1, 2, 3, 4].map(i => (
         <div key={i} style={{
-          height: 52,
-          borderRadius: 8,
+          height: 52, borderRadius: 8,
           background: 'linear-gradient(90deg, var(--border-light) 25%, var(--bg) 50%, var(--border-light) 75%)',
           backgroundSize: '200% 100%',
           animation: 'shimmer 1.4s infinite',
