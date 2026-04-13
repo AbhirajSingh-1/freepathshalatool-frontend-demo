@@ -1,14 +1,40 @@
 // Frontend/src/pages/PickupOverview.jsx
-// Admin-only: Overview of all pickups — Individual & Drive stats + scheduler tabs
+// Admin/Manager: Overview of all pickups — Individual & Drive stats + scheduler tabs
 import { useState, useMemo } from 'react'
 import {
   Truck, Users, AlertTriangle, TrendingUp,
-  Filter, X, Calendar, BarChart3,
+  Filter, X, Calendar, BarChart3, ChevronDown, ChevronUp,
 } from 'lucide-react'
-import { useApp }        from '../context/AppContext'
-import { useRole }       from '../context/RoleContext'
-import PickupTabs        from '../components/PickupTabs'
+import { useApp }   from '../context/AppContext'
+import { useRole }  from '../context/RoleContext'
+import PickupTabs   from '../components/PickupTabs'
 import { fmtDate, fmtCurrency } from '../utils/helpers'
+
+// ── Period helpers (shared with Dashboard) ─────────────────────────────────────
+const padM = (n) => String(n).padStart(2, '0')
+const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+
+function getFinancialYear(date = new Date()) {
+  return date.getMonth() + 1 >= 4 ? date.getFullYear() : date.getFullYear() - 1
+}
+
+function getLast5Months() {
+  const now = new Date()
+  return Array.from({ length: 5 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1)
+    return `${d.getFullYear()}-${padM(d.getMonth() + 1)}`
+  })
+}
+
+function getMonthRange(ym) {
+  const [y, m] = ym.split('-').map(Number)
+  const last = new Date(y, m, 0).getDate()
+  return { from: `${ym}-01`, to: `${ym}-${padM(last)}` }
+}
+
+function getFYRange(fyStart) {
+  return { from: `${fyStart}-04-01`, to: `${fyStart + 1}-03-31` }
+}
 
 const fmt = (d) => d.toISOString().slice(0, 10)
 function getPresetRange(p) {
@@ -20,7 +46,7 @@ function getPresetRange(p) {
   return { from: '', to: '' }
 }
 
-// ── Stats row component ───────────────────────────────────────────────────────
+// ── Stats row ─────────────────────────────────────────────────────────────────
 function PickupStatRow({ label, value, sub, color = 'var(--text-primary)' }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: '1px solid var(--border-light)' }}>
@@ -33,45 +59,137 @@ function PickupStatRow({ label, value, sub, color = 'var(--text-primary)' }) {
   )
 }
 
+// ── Period Selector ────────────────────────────────────────────────────────────
+function PeriodBar({ dateFrom, dateTo, onRange, last5 }) {
+  const [fyOpen, setFyOpen] = useState(false)
+  const currentFY  = getFinancialYear()
+  const fyOptions  = [currentFY, currentFY - 1, currentFY - 2]
+
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '10px 0 6px' }}>
+      {last5.map(ym => {
+        const [y, m] = ym.split('-')
+        const r = getMonthRange(ym)
+        const active = dateFrom === r.from && dateTo === r.to
+        return (
+          <button
+            key={ym}
+            className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: 11.5 }}
+            onClick={() => onRange(r.from, r.to)}
+          >
+            {MONTHS_SHORT[+m - 1]} {y}
+          </button>
+        )
+      })}
+
+      {/* FY dropdown */}
+      <div style={{ position: 'relative' }}>
+        <button
+          className="btn btn-ghost btn-sm"
+          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5 }}
+          onClick={() => setFyOpen(o => !o)}
+        >
+          Financial Year {fyOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+        </button>
+        {fyOpen && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 40,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            borderRadius: 8, boxShadow: 'var(--shadow-md)', padding: 6, minWidth: 140,
+          }}>
+            {fyOptions.map(fy => {
+              const r = getFYRange(fy)
+              const active = dateFrom === r.from && dateTo === r.to
+              return (
+                <button
+                  key={fy}
+                  className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`}
+                  style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 3, fontSize: 11.5 }}
+                  onClick={() => { onRange(r.from, r.to); setFyOpen(false) }}
+                >
+                  FY {fy}-{fy + 1}
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <button
+        className={`btn btn-sm ${!dateFrom && !dateTo ? 'btn-primary' : 'btn-ghost'}`}
+        style={{ fontSize: 11.5 }}
+        onClick={() => onRange('', '')}
+      >
+        All Time
+      </button>
+
+      {(dateFrom || dateTo) && (
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => onRange('', '')}
+          style={{ color: 'var(--danger)', fontSize: 11.5 }}
+        >
+          <X size={11} /> Clear
+        </button>
+      )}
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function PickupOverview() {
-  const { pickups, donors, schedulerTabData, dashboardStats } = useApp()
+  const { pickups, donors, schedulerTabData } = useApp()
   const { can } = useRole()
 
-  const [section,    setSection]   = useState('overview')  // overview | scheduler
+  // Default: last 5 months span
+  const last5 = getLast5Months()
+  const defaultFrom = last5[0] + '-01'
+  const defaultTo   = new Date().toISOString().slice(0, 10)
+
+  const [section,    setSection]   = useState('overview')
   const [activeTab,  setActiveTab] = useState('scheduled')
-  const [datePreset, setPreset]    = useState('all')
-  const [dateFrom,   setDateFrom]  = useState('')
-  const [dateTo,     setDateTo]    = useState('')
+  const [dateFrom,   setDateFrom]  = useState(defaultFrom)
+  const [dateTo,     setDateTo]    = useState(defaultTo)
   const [sector,     setSector]    = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  // Scheduler sub-filters
+  const [schPreset, setSchPreset] = useState('all')
+  const [schFrom,   setSchFrom]   = useState('')
+  const [schTo,     setSchTo]     = useState('')
 
-  // Apply preset
-  const applyPreset = (p) => {
-    setPreset(p)
-    if (p !== 'custom' && p !== 'all') { const r = getPresetRange(p); setDateFrom(r.from); setDateTo(r.to) }
-    else if (p === 'all') { setDateFrom(''); setDateTo('') }
+  const applySchPreset = (p) => {
+    setSchPreset(p)
+    if (p !== 'custom' && p !== 'all') { const r = getPresetRange(p); setSchFrom(r.from); setSchTo(r.to) }
+    else if (p === 'all') { setSchFrom(''); setSchTo('') }
   }
 
-  // All sectors from pickups
   const allSectors = useMemo(() => [...new Set(pickups.map(p => p.sector).filter(Boolean))].sort(), [pickups])
 
-  // Individual pickups analytics
-  const individualPickups = useMemo(() => pickups.filter(p => p.pickupMode === 'Individual'), [pickups])
-  const drivePickups      = useMemo(() => pickups.filter(p => p.pickupMode === 'Drive'), [pickups])
+  // Filter pickups by period
+  const filteredPickups = useMemo(() =>
+    pickups.filter(p => {
+      const d = p.date || ''
+      const inDate = (!dateFrom || d >= dateFrom) && (!dateTo || d <= dateTo)
+      const inSec  = !sector || p.sector === sector
+      return inDate && inSec
+    }),
+    [pickups, dateFrom, dateTo, sector]
+  )
 
-  const completedInd   = individualPickups.filter(p => p.status === 'Completed')
-  const completedDrive = drivePickups.filter(p => p.status === 'Completed')
+  const individualPickups  = useMemo(() => filteredPickups.filter(p => p.pickupMode !== 'Drive'), [filteredPickups])
+  const drivePickups       = useMemo(() => filteredPickups.filter(p => p.pickupMode === 'Drive'), [filteredPickups])
+  const completedInd       = individualPickups.filter(p => p.status === 'Completed')
+  const completedDrive     = drivePickups.filter(p => p.status === 'Completed')
+  const indRevenue         = completedInd.reduce((s, p) => s + (p.totalValue || 0), 0)
+  const driveRevenue       = completedDrive.reduce((s, p) => s + (p.totalValue || 0), 0)
+  const pendingInd         = individualPickups.filter(p => p.status === 'Pending').length
+  const pendingDrive       = drivePickups.filter(p => p.status === 'Pending').length
 
-  const indRevenue   = completedInd.reduce((s, p) => s + (p.totalValue || 0), 0)
-  const driveRevenue = completedDrive.reduce((s, p) => s + (p.totalValue || 0), 0)
-
-  const pendingInd   = individualPickups.filter(p => p.status === 'Pending').length
-  const pendingDrive = drivePickups.filter(p => p.status === 'Pending').length
-
-  // Monthly breakdown
+  // Monthly breakdown (period-aware)
   const monthlyStats = useMemo(() => {
     const m = {}
-    pickups.filter(p => p.status === 'Completed').forEach(p => {
+    filteredPickups.filter(p => p.status === 'Completed').forEach(p => {
       const key = (p.date || '').slice(0, 7)
       if (!key) return
       if (!m[key]) m[key] = { month: key, individual: 0, drive: 0, revenue: 0 }
@@ -79,21 +197,28 @@ export default function PickupOverview() {
       else m[key].individual++
       m[key].revenue += p.totalValue || 0
     })
-    return Object.values(m).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 6)
-  }, [pickups])
+    return Object.values(m).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 8)
+  }, [filteredPickups])
 
-  // Filtered scheduler tabs
+  // Scheduler tab data filtered
   const filteredTabData = useMemo(() => {
-    const inRange  = (ds) => { if (!ds) return true; if (dateFrom && ds < dateFrom) return false; if (dateTo && ds > dateTo) return false; return true }
-    const inSector = (row) => !sector || row.sector === sector
-    const f        = (rows, dk = 'scheduledDate') => rows.filter(r => inRange(r[dk]) && inSector(r))
+    const inRange  = (ds) => { if (!ds) return true; if (schFrom && ds < schFrom) return false; if (schTo && ds > schTo) return false; return true }
+    const inSec    = (row) => !sector || row.sector === sector
+    const f        = (rows, dk = 'scheduledDate') => rows.filter(r => inRange(r[dk]) && inSec(r))
     return {
-      overdue:   f(schedulerTabData.overdue),
-      scheduled: f(schedulerTabData.scheduled),
-      atRisk:    f(schedulerTabData.atRisk, 'lastPickup'),
-      churned:   f(schedulerTabData.churned, 'lastPickup'),
+      overdue:   f(schedulerTabData.overdue   || []),
+      scheduled: f(schedulerTabData.scheduled || []),
+      atRisk:    f(schedulerTabData.atRisk    || [], 'lastPickup'),
+      churned:   f(schedulerTabData.churned   || [], 'lastPickup'),
     }
-  }, [schedulerTabData, dateFrom, dateTo, sector])
+  }, [schedulerTabData, schFrom, schTo, sector])
+
+  const periodLabel = useMemo(() => {
+    if (!dateFrom && !dateTo) return 'All Time'
+    if (dateFrom && dateTo)   return `${fmtDate(dateFrom)} – ${fmtDate(dateTo)}`
+    if (dateFrom)             return `From ${fmtDate(dateFrom)}`
+    return `Until ${fmtDate(dateTo)}`
+  }, [dateFrom, dateTo])
 
   if (!can.viewPickupOverview) {
     return (
@@ -110,7 +235,7 @@ export default function PickupOverview() {
   return (
     <div className="page-body">
       {/* Section tabs */}
-      <div className="tabs" style={{ marginBottom: 24 }}>
+      <div className="tabs" style={{ marginBottom: 20 }}>
         <button className={`tab ${section === 'overview' ? 'active' : ''}`} onClick={() => setSection('overview')}>
           <BarChart3 size={13} style={{ marginRight: 5 }} />Pickup Analytics
         </button>
@@ -122,7 +247,28 @@ export default function PickupOverview() {
       {/* ── OVERVIEW SECTION ── */}
       {section === 'overview' && (
         <>
-          {/* Top KPIs */}
+          {/* Period bar */}
+          <div className="card" style={{ marginBottom: 20, padding: '8px 16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Period:</span>
+                <span style={{ fontSize: 12.5, color: 'var(--primary)', fontWeight: 600 }}>{periodLabel}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <select value={sector} onChange={e => setSector(e.target.value)} style={{ fontSize: 12, minWidth: 140 }}>
+                  <option value="">All Sectors</option>
+                  {allSectors.map(s => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <PeriodBar
+              dateFrom={dateFrom} dateTo={dateTo}
+              onRange={(f, t) => { setDateFrom(f); setDateTo(t) }}
+              last5={last5}
+            />
+          </div>
+
+          {/* KPIs */}
           <div className="stat-grid" style={{ marginBottom: 24 }}>
             <div className="stat-card orange">
               <div className="stat-icon"><Truck size={18} /></div>
@@ -149,39 +295,34 @@ export default function PickupOverview() {
           </div>
 
           <div className="two-col" style={{ marginBottom: 24 }}>
-            {/* Individual stats */}
             <div className="card">
               <div className="card-header">
                 <Truck size={16} color="var(--primary)" />
                 <div className="card-title">Individual Pickup Stats</div>
               </div>
               <div className="card-body">
-                <PickupStatRow label="Total Completed"      value={completedInd.length}       color="var(--secondary)" />
-                <PickupStatRow label="Total Pending"        value={pendingInd}                 color="var(--info)" />
-                <PickupStatRow label="Total Revenue"        value={fmtCurrency(indRevenue)}   color="var(--primary)" />
-                <PickupStatRow label="Avg Revenue / Pickup" value={completedInd.length ? fmtCurrency(Math.round(indRevenue / completedInd.length)) : '—'} />
-                <PickupStatRow label="Postponed"            value={individualPickups.filter(p => p.status === 'Postponed').length} />
-                <PickupStatRow label="Did Not Open Door"    value={individualPickups.filter(p => p.status === 'Did Not Open Door').length} />
-                <PickupStatRow label="RST Pickups"          value={completedInd.filter(p => p.type?.includes('RST')).length} />
-                <PickupStatRow label="SKS Pickups"          value={completedInd.filter(p => p.type?.includes('SKS')).length} />
+                <PickupStatRow label="Completed"           value={completedInd.length}       color="var(--secondary)" />
+                <PickupStatRow label="Pending"             value={pendingInd}                 color="var(--info)" />
+                <PickupStatRow label="Total Revenue"       value={fmtCurrency(indRevenue)}    color="var(--primary)" />
+                <PickupStatRow label="Avg Revenue/Pickup"  value={completedInd.length ? fmtCurrency(Math.round(indRevenue / completedInd.length)) : '—'} />
+                <PickupStatRow label="Postponed"           value={individualPickups.filter(p => p.status === 'Postponed').length} />
+                <PickupStatRow label="RST Pickups"         value={completedInd.filter(p => p.type?.includes('RST')).length} />
+                <PickupStatRow label="SKS Pickups"         value={completedInd.filter(p => p.type?.includes('SKS')).length} />
               </div>
             </div>
 
-            {/* Drive stats */}
             <div className="card">
               <div className="card-header">
                 <Users size={16} color="var(--info)" />
-                <div className="card-title">Drive / Campaign Pickup Stats</div>
+                <div className="card-title">Drive / Campaign Stats</div>
               </div>
               <div className="card-body">
-                <PickupStatRow label="Total Completed"      value={completedDrive.length}      color="var(--secondary)" />
-                <PickupStatRow label="Total Pending"        value={pendingDrive}                color="var(--info)" />
-                <PickupStatRow label="Total Revenue"        value={fmtCurrency(driveRevenue)}  color="var(--primary)" />
-                <PickupStatRow label="Avg Revenue / Drive"  value={completedDrive.length ? fmtCurrency(Math.round(driveRevenue / completedDrive.length)) : '—'} />
-                <PickupStatRow label="Postponed"            value={drivePickups.filter(p => p.status === 'Postponed').length} />
-                <PickupStatRow label="SKS Drives"           value={completedDrive.filter(p => p.type?.includes('SKS')).length} />
-                <PickupStatRow label="RST Drives"           value={completedDrive.filter(p => p.type?.includes('RST')).length} />
-                <PickupStatRow label="RST+SKS Combo Drives" value={completedDrive.filter(p => p.type === 'RST+SKS').length} />
+                <PickupStatRow label="Completed"           value={completedDrive.length}      color="var(--secondary)" />
+                <PickupStatRow label="Pending"             value={pendingDrive}                color="var(--info)" />
+                <PickupStatRow label="Total Revenue"       value={fmtCurrency(driveRevenue)}  color="var(--primary)" />
+                <PickupStatRow label="Avg Revenue/Drive"   value={completedDrive.length ? fmtCurrency(Math.round(driveRevenue / completedDrive.length)) : '—'} />
+                <PickupStatRow label="SKS Drives"          value={completedDrive.filter(p => p.type?.includes('SKS')).length} />
+                <PickupStatRow label="RST+SKS Combo"       value={completedDrive.filter(p => p.type === 'RST+SKS').length} />
               </div>
             </div>
           </div>
@@ -191,21 +332,16 @@ export default function PickupOverview() {
             <div className="card-header">
               <BarChart3 size={16} color="var(--secondary)" />
               <div className="card-title">Monthly Pickup Breakdown</div>
+              <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>{periodLabel}</span>
             </div>
             <div className="table-wrap" style={{ border: 'none', boxShadow: 'none', borderRadius: 0 }}>
               <table>
                 <thead>
-                  <tr>
-                    <th>Month</th>
-                    <th>Individual</th>
-                    <th>Drive</th>
-                    <th>Total</th>
-                    <th>Revenue</th>
-                  </tr>
+                  <tr><th>Month</th><th>Individual</th><th>Drive</th><th>Total</th><th>Revenue</th></tr>
                 </thead>
                 <tbody>
                   {monthlyStats.length === 0 ? (
-                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No completed pickups</td></tr>
+                    <tr><td colSpan={5} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No completed pickups in selected period</td></tr>
                   ) : monthlyStats.map(m => (
                     <tr key={m.month}>
                       <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>{m.month}</td>
@@ -227,7 +363,11 @@ export default function PickupOverview() {
         <div className="card">
           <div className="card-header" style={{ flexWrap: 'wrap', gap: 10 }}>
             <div className="card-title">Scheduled & At-Risk Pickups</div>
-            <button className={`btn btn-sm ${showFilters ? 'btn-outline' : 'btn-ghost'}`} onClick={() => setShowFilters(f => !f)} style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+            <button
+              className={`btn btn-sm ${showFilters ? 'btn-outline' : 'btn-ghost'}`}
+              onClick={() => setShowFilters(f => !f)}
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}
+            >
               <Filter size={13} />Filters
             </button>
           </div>
@@ -238,13 +378,13 @@ export default function PickupOverview() {
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Date</label>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {[['today','Today'],['yesterday','Yesterday'],['tomorrow','Tomorrow'],['week','This Week'],['all','All'],['custom','Custom']].map(([v, l]) => (
-                    <button key={v} className={`btn btn-sm ${datePreset === v ? 'btn-primary' : 'btn-ghost'}`} onClick={() => applyPreset(v)} style={{ fontSize: 12 }}>{l}</button>
+                    <button key={v} className={`btn btn-sm ${schPreset === v ? 'btn-primary' : 'btn-ghost'}`} onClick={() => applySchPreset(v)} style={{ fontSize: 12 }}>{l}</button>
                   ))}
-                  {datePreset === 'custom' && (
+                  {schPreset === 'custom' && (
                     <>
-                      <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width: 140, fontSize: 12 }} />
+                      <input type="date" value={schFrom} onChange={e => setSchFrom(e.target.value)} style={{ width: 140, fontSize: 12 }} />
                       <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-                      <input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}   style={{ width: 140, fontSize: 12 }} />
+                      <input type="date" value={schTo}   onChange={e => setSchTo(e.target.value)}   style={{ width: 140, fontSize: 12 }} />
                     </>
                   )}
                 </div>
@@ -256,8 +396,8 @@ export default function PickupOverview() {
                   {allSectors.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              {(sector || datePreset !== 'all') && (
-                <button className="btn btn-ghost btn-sm" onClick={() => { setSector(''); applyPreset('all') }}>
+              {(sector || schPreset !== 'all') && (
+                <button className="btn btn-ghost btn-sm" onClick={() => { setSector(''); applySchPreset('all') }}>
                   <X size={11} /> Clear
                 </button>
               )}

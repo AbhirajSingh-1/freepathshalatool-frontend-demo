@@ -7,6 +7,19 @@ export const ROLES = {
   executive: { label: 'Executive', color: '#3B82F6', bg: '#DBEAFE' },
 }
 
+// Pages each role may access
+export const ROLE_PAGES = {
+  admin:     ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'raddimaster'],
+  manager:   ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview'],
+  executive: ['pickups', 'pickuppartners'],
+}
+
+export const DEFAULT_PAGE = {
+  admin:     'dashboard',
+  manager:   'dashboard',
+  executive: 'pickups',
+}
+
 const RoleContext = createContext(null)
 
 export const useRole = () => {
@@ -24,24 +37,34 @@ export function RoleProvider({ children }) {
     localStorage.setItem('fp_role', r)
   }
 
-  // Granular capability map
   const can = {
+    // Page / section visibility
+    viewDashboard:      role === 'admin' || role === 'manager',
+    viewDonors:         role === 'admin' || role === 'manager',
+    viewPayments:       role === 'admin' || role === 'manager',
+    viewRaddiMaster:    role === 'admin',
+    viewScheduler:      role === 'admin' || role === 'manager',
     viewReports:        role === 'admin' || role === 'manager',
     viewFinancials:     role === 'admin' || role === 'manager',
-    deletePartner:      role === 'admin',
-    deletePickup:       role === 'admin',
-    deleteDonor:        role === 'admin' || role === 'manager',
-    addPartner:         true,                                // all roles
-    editPartner:        role === 'admin' || role === 'manager',
-    recordPickup:       true,                                // all roles
-    schedulePickup:     true,
     viewPickupOverview: role === 'admin' || role === 'manager',
     viewPartnerReports: role === 'admin' || role === 'manager',
-    manageDonors:       role === 'admin' || role === 'manager',
+
+    // Actions
+    deletePartner:   role === 'admin',
+    deletePickup:    role === 'admin',
+    deleteDonor:     role === 'admin' || role === 'manager',
+    addPartner:      true,
+    editPartner:     role === 'admin' || role === 'manager',
+    recordPickup:    true,
+    schedulePickup:  role === 'admin' || role === 'manager',
+    manageDonors:    role === 'admin' || role === 'manager',
+
+    // Helper: is a given page accessible for current role?
+    canAccessPage: (page) => (ROLE_PAGES[role] || []).includes(page),
   }
 
   return (
-    <RoleContext.Provider value={{ role, changeRole, can, ROLES }}>
+    <RoleContext.Provider value={{ role, changeRole, can, ROLES, ROLE_PAGES, DEFAULT_PAGE }}>
       {children}
     </RoleContext.Provider>
   )

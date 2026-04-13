@@ -1,18 +1,11 @@
-// Frontend/src/pages/Pickups.jsx
-// ─── Field Staff: Record Pickup ───────────────────────────────────────────────
-// Changes:
-//  - Pickup date locked to today (cannot be changed)
-//  - RST "Others": manual amount entry (dynamic rate)
-//  - SKS: simplified to checkbox-only (no count/packaging)
-//  - Pickup Partner dropdown: sector-based recommendations
-
+// Frontend/src/pages/Pickups.jsx — Multi-Others RST, date locked today
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   Search, Plus, X, CheckSquare, Square,
   IndianRupee, MapPin, Phone,
   CheckCircle, Truck, Clock,
   AlertCircle, Package, Weight, Hash, UserCheck, ChevronDown,
-  History, Star,
+  History, Star, Trash2,
 } from 'lucide-react'
 import { useApp }   from '../context/AppContext'
 import DonorModal   from '../components/DonorModal'
@@ -20,20 +13,21 @@ import { RST_ITEMS, SKS_ITEMS, PICKUP_MODES } from '../data/mockData'
 import { fmtDate, fmtCurrency, generateOrderId, pickupStatusColor, paymentStatusColor } from '../utils/helpers'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
-
 const PAYMENT_STATUS_OPTIONS = ['Paid', 'Not Paid', 'Partially Paid', 'Write Off']
+let _otherId = 0
+const nextOtherId = () => ++_otherId
 
 const EMPTY_FORM = {
   donorId: '', pickupMode: 'Individual',
   kabadiwala: '', kabadiMobile: '',
-  rstItems: [], rstOtherText: '', rstItemWeights: {}, rstOtherAmount: '',
+  rstItems: [], rstItemWeights: {},
+  rstOthers: [],          // Array of { id, name, weight, unit, amount }
   sksItems: [], sksOtherText: '',
   totalValue: '', amountPaid: '', paymentStatus: 'Not Paid', notes: '',
 }
 
 function derivePayStatus(total, paid) {
-  const t = Number(total) || 0
-  const p = Number(paid)  || 0
+  const t = Number(total) || 0; const p = Number(paid) || 0
   if (t === 0) return 'Not Paid'
   if (p >= t)  return 'Paid'
   if (p > 0)   return 'Partially Paid'
@@ -48,15 +42,15 @@ function toKg(value, unit) {
 // ─── Donor search dropdown ────────────────────────────────────────────────────
 function DonorSearch({ donors, selectedId, onSelect, onAddNew }) {
   const [query, setQuery] = useState('')
-  const [open,  setOpen]  = useState(false)
+  const [open, setOpen]   = useState(false)
   const selected = useMemo(() => donors.find(d => d.id === selectedId), [donors, selectedId])
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim()
     if (!q) return donors.slice(0, 30)
     return donors.filter(d => d.name.toLowerCase().includes(q) || (d.mobile || '').includes(q))
   }, [donors, query])
-  const choose = (d) => { onSelect(d.id); setOpen(false); setQuery('') }
-  const clear  = (e) => { e.stopPropagation(); onSelect(''); setQuery('') }
+  const choose   = (d)  => { onSelect(d.id); setOpen(false); setQuery('') }
+  const clear    = (e)  => { e.stopPropagation(); onSelect(''); setQuery('') }
   const handleBlur = (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false) }
 
   return (
@@ -80,7 +74,7 @@ function DonorSearch({ donors, selectedId, onSelect, onAddNew }) {
           {filtered.length === 0 ? (
             <div style={{ padding: '14px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>No donors match "{query}"</div>
           ) : filtered.map(d => (
-            <div key={d.id} tabIndex={0} onMouseDown={e => { e.preventDefault(); choose(d) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', background: d.id === selectedId ? 'var(--primary-light)' : 'transparent' }} onMouseEnter={e => { if (d.id !== selectedId) e.currentTarget.style.background = 'var(--bg)' }} onMouseLeave={e => { e.currentTarget.style.background = d.id === selectedId ? 'var(--primary-light)' : 'transparent' }}>
+            <div key={d.id} tabIndex={0} onMouseDown={e => { e.preventDefault(); choose(d) }} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', background: d.id === selectedId ? 'var(--primary-light)' : 'transparent' }}>
               <div style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: 'var(--primary)', fontSize: 14 }}>{d.name[0]}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -101,28 +95,24 @@ function DonorSearch({ donors, selectedId, onSelect, onAddNew }) {
   )
 }
 
-// ─── Pickup Partner Search — SECTOR-BASED SUGGESTIONS ────────────────────────
+// ─── Pickup Partner dropdown ──────────────────────────────────────────────────
 function PartnerSearch({ partners, donorSector, value, onChange }) {
   const [query, setQuery] = useState('')
-  const [open,  setOpen]  = useState(false)
+  const [open, setOpen]   = useState(false)
   const rootRef = useRef(null)
-  const selected = useMemo(() => partners.find(k => k.name === value), [partners, value])
+  const selected = useMemo(() => (partners || []).find(k => k.name === value), [partners, value])
 
-  // Split into recommended (covers donor's sector) vs others
   const { recommended, others } = useMemo(() => {
-    if (!donorSector) return { recommended: [], others: partners }
-    const rec = partners.filter(p =>
-      (p.sectors || []).includes(donorSector) ||
-      (p.societies || []).some(s => s) // fallback if old-style area field matches
-    )
-    const oth = partners.filter(p => !rec.includes(p))
-    return { recommended: rec, others: oth }
+    const safe = partners || []
+    if (!donorSector) return { recommended: [], others: safe }
+    const rec = safe.filter(p => (p.sectors || []).includes(donorSector))
+    return { recommended: rec, others: safe.filter(p => !rec.includes(p)) }
   }, [partners, donorSector])
 
   const filterList = (list) => {
     const q = query.toLowerCase().trim()
     if (!q) return list
-    return list.filter(k => k.name.toLowerCase().includes(q) || (k.mobile || '').includes(q) || (k.area || '').toLowerCase().includes(q))
+    return list.filter(k => k.name.toLowerCase().includes(q) || (k.mobile || '').includes(q))
   }
 
   useEffect(() => {
@@ -132,27 +122,17 @@ function PartnerSearch({ partners, donorSector, value, onChange }) {
   }, [])
 
   const choose = (k) => { onChange(k.name); setOpen(false); setQuery('') }
-  const clear  = (e) => { e.stopPropagation(); onChange(''); setQuery('') }
 
   const PartnerOption = ({ k, isRec }) => (
-    <div onMouseDown={() => choose(k)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', background: k.name === value ? 'var(--secondary-light)' : 'transparent', transition: 'background 0.1s' }} onMouseEnter={e => { if (k.name !== value) e.currentTarget.style.background = 'var(--bg)' }} onMouseLeave={e => { e.currentTarget.style.background = k.name === value ? 'var(--secondary-light)' : 'transparent' }}>
-      <div style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0, background: isRec ? 'var(--secondary-light)' : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: isRec ? 'var(--secondary)' : 'var(--text-muted)', fontSize: 14 }}>
-        {k.name[0]}
-      </div>
+    <div onMouseDown={() => choose(k)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', background: k.name === value ? 'var(--secondary-light)' : 'transparent', transition: 'background 0.1s' }}>
+      <div style={{ width: 34, height: 34, borderRadius: 8, flexShrink: 0, background: isRec ? 'var(--secondary-light)' : 'var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: isRec ? 'var(--secondary)' : 'var(--text-muted)', fontSize: 14 }}>{k.name[0]}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           <span style={{ fontFamily: 'monospace', fontSize: 10, fontWeight: 800, color: 'white', background: 'var(--secondary)', padding: '1px 5px', borderRadius: 3 }}>{k.id}</span>
           <div style={{ fontWeight: 700, fontSize: 13 }}>{k.name}</div>
           {isRec && <span style={{ fontSize: 10, background: 'var(--secondary)', color: '#fff', borderRadius: 20, padding: '1px 7px', fontWeight: 600 }}>✓ Recommended</span>}
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{k.mobile}{k.sectors?.length ? ` · ${k.sectors.join(', ')}` : k.area ? ` · ${k.area}` : ''}</div>
-        {k.rateChart && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 3 }}>
-            {Object.entries(k.rateChart).filter(([,v]) => v > 0).slice(0, 3).map(([item, rate]) => (
-              <span key={item} style={{ fontSize: 9.5, padding: '1px 5px', borderRadius: 10, background: 'var(--secondary-light)', color: 'var(--secondary)', fontWeight: 600 }}>{item} ₹{rate}</span>
-            ))}
-          </div>
-        )}
+        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{k.mobile}{k.sectors?.length ? ` · ${k.sectors.join(', ')}` : ''}</div>
       </div>
       {k.name === value && <CheckCircle size={13} color="var(--secondary)" style={{ flexShrink: 0 }} />}
     </div>
@@ -166,14 +146,14 @@ function PartnerSearch({ partners, donorSector, value, onChange }) {
           <>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--secondary)' }}>{selected.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--secondary)', opacity: 0.7 }}>{selected.mobile}{selected.sectors?.length ? ` · ${selected.sectors.join(', ')}` : ''}</div>
+              <div style={{ fontSize: 11, color: 'var(--secondary)', opacity: 0.7 }}>{selected.mobile}</div>
             </div>
-            <button type="button" onClick={clear} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, color: 'var(--secondary)', display: 'flex', flexShrink: 0 }}><X size={14} /></button>
+            <button type="button" onClick={e => { e.stopPropagation(); onChange(''); }} style={{ border: 'none', background: 'none', cursor: 'pointer', padding: 2, color: 'var(--secondary)', display: 'flex', flexShrink: 0 }}><X size={14} /></button>
           </>
         ) : (
           <>
             <span style={{ flex: 1, color: 'var(--text-muted)', fontSize: 13.5 }}>
-              {donorSector ? `Search pickup partner for ${donorSector}…` : 'Search pickup partner…'}
+              {donorSector ? `Search partner for ${donorSector}…` : 'Search pickup partner…'}
             </span>
             <ChevronDown size={14} color="var(--text-muted)" style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }} />
           </>
@@ -186,7 +166,7 @@ function PartnerSearch({ partners, donorSector, value, onChange }) {
             <Search size={13} style={{ position: 'absolute', left: 22, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
             <input autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder="Type name or mobile…" style={{ paddingLeft: 28, width: '100%', fontSize: 13, border: 'none', outline: 'none', background: 'transparent', color: 'var(--text-primary)' }} />
           </div>
-          <div onMouseDown={() => { onChange(''); setOpen(false); setQuery('') }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--bg)' }} onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}>
+          <div onMouseDown={() => { onChange(''); setOpen(false); setQuery('') }} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: '1px solid var(--border-light)', cursor: 'pointer', fontSize: 13, color: 'var(--text-muted)', fontStyle: 'italic' }}>
             <X size={12} /> None / Unassigned
           </div>
           <div style={{ maxHeight: 300, overflowY: 'auto' }}>
@@ -201,10 +181,7 @@ function PartnerSearch({ partners, donorSector, value, onChange }) {
                 )}
               </>
             )}
-            {filterList(donorSector ? others : partners).map(k => <PartnerOption key={k.id} k={k} isRec={false} />)}
-            {filterList(recommended).length === 0 && filterList(others).length === 0 && (
-              <div style={{ padding: '16px 14px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>No partners match your search</div>
-            )}
+            {filterList(donorSector ? others : (partners || [])).map(k => <PartnerOption key={k.id} k={k} isRec={false} />)}
           </div>
         </div>
       )}
@@ -212,10 +189,27 @@ function PartnerSearch({ partners, donorSector, value, onChange }) {
   )
 }
 
-// ─── RST Item Chips with weight + Others manual amount ────────────────────────
-function RSTItemChips({ items, selected, weights, onToggle, onWeight, otherText, onOtherText, otherAmount, onOtherAmount }) {
-  const fmt = (n) => n % 1 === 0 ? n.toString() : n.toFixed(3)
-  const totalWeight = selected.filter(i => i !== 'Others').reduce((sum, item) => sum + toKg(weights[item]?.value, weights[item]?.unit || 'kg'), 0)
+// ─── RST Item Chips ────────────────────────────────────────────────────────────
+function RSTItemChips({ items, selected, weights, onToggle, onWeight, rstOthers, onOthersChange }) {
+  const fmt = (n) => n % 1 === 0 ? String(n) : n.toFixed(3)
+  const totalWeight = selected.filter(i => i !== 'Others').reduce((sum, item) => {
+    const w = weights[item] || { value: '', unit: 'kg' }
+    return sum + toKg(w.value, w.unit || 'kg')
+  }, 0)
+
+  const addOther = () => {
+    onOthersChange([...rstOthers, { id: nextOtherId(), name: '', weight: '', unit: 'kg', amount: '' }])
+  }
+
+  const removeOther = (id) => {
+    const next = rstOthers.filter(o => o.id !== id)
+    onOthersChange(next)
+    if (next.length === 0) onToggle('Others') // deselect chip if no entries
+  }
+
+  const updateOther = (id, key, val) => {
+    onOthersChange(rstOthers.map(o => o.id === id ? { ...o, [key]: val } : o))
+  }
 
   return (
     <div>
@@ -233,70 +227,148 @@ function RSTItemChips({ items, selected, weights, onToggle, onWeight, otherText,
 
       {selected.length > 0 && (
         <div style={{ marginTop: 12, border: '1.5px solid var(--primary)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', background: 'var(--surface)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 90px 80px', padding: '7px 14px', background: 'var(--primary-light)', fontSize: 10.5, fontWeight: 700, color: 'var(--primary-dark)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <span>Item</span><span style={{ textAlign: 'center' }}>Weight</span><span style={{ textAlign: 'center' }}>Unit</span><span style={{ textAlign: 'right' }}>Remove</span>
-          </div>
-
-          {selected.filter(i => i !== 'Others').map((item, idx) => {
-            const w  = weights[item] || { value: '', unit: 'kg' }
-            const kg = toKg(w.value, w.unit || 'kg')
-            return (
-              <div key={item} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 90px 80px', alignItems: 'center', padding: '9px 14px', borderTop: idx > 0 ? '1px solid var(--border-light)' : 'none', background: idx % 2 === 0 ? 'var(--surface)' : 'var(--bg)', gap: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{item}</span>
-                  {kg > 0 && <span style={{ fontSize: 11, color: 'var(--secondary)', fontWeight: 600, marginLeft: 4 }}>= {fmt(kg)} kg</span>}
-                </div>
-                <input type="text" inputMode="decimal" value={w.value || ''} onChange={e => onWeight(item, { ...w, value: e.target.value.replace(/[^0-9.]/g, '') })} placeholder="0" style={{ width: '100%', padding: '6px 10px', fontSize: 13, fontWeight: 700, textAlign: 'right', border: `1.5px solid ${w.value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, background: 'var(--surface)', outline: 'none' }} />
-                <select value={w.unit || 'kg'} onChange={e => onWeight(item, { ...w, unit: e.target.value })} style={{ width: '100%', padding: '6px 8px', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--border)', borderRadius: 6, background: 'var(--surface)', cursor: 'pointer' }}>
-                  <option value="kg">kg</option>
-                  <option value="gm">gm</option>
-                </select>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button type="button" onClick={() => onToggle(item)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--danger)', background: 'var(--danger-bg)', cursor: 'pointer', color: 'var(--danger)', transition: 'all 0.13s' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--danger)'; e.currentTarget.style.color = '#fff' }} onMouseLeave={e => { e.currentTarget.style.background = 'var(--danger-bg)'; e.currentTarget.style.color = 'var(--danger)' }}>
-                    <X size={12} />
-                  </button>
-                </div>
+          {/* Regular RST items table */}
+          {selected.filter(i => i !== 'Others').length > 0 && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px 90px 80px', padding: '7px 14px', background: 'var(--primary-light)', fontSize: 10.5, fontWeight: 700, color: 'var(--primary-dark)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                <span>Item</span><span style={{ textAlign: 'center' }}>Weight</span><span style={{ textAlign: 'center' }}>Unit</span><span style={{ textAlign: 'right' }}>Remove</span>
               </div>
-            )
-          })}
 
-          {/* "Others" row — weight + manual amount (dynamic rate) */}
-          {selected.includes('Others') && (
-            <div style={{ borderTop: '1px solid var(--border-light)', background: 'var(--primary-light)', padding: '10px 14px' }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--primary-dark)', marginBottom: 8 }}>
-                "Others" — specify type and enter manual amount (dynamic rate)
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', gap: 8, alignItems: 'center' }}>
-                <div>
-                  <label style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Item description</label>
-                  <input type="text" value={otherText} onChange={e => onOtherText(e.target.value)} placeholder="e.g. Broken mirror, Mattress…" style={{ width: '100%', marginTop: 4, border: '1.5px solid var(--primary)', borderRadius: 6, padding: '6px 10px', fontSize: 12.5, outline: 'none', background: 'var(--surface)' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Manual Amount (₹) <span style={{ fontWeight: 400 }}>— negotiated price</span></label>
-                  <div style={{ position: 'relative', marginTop: 4 }}>
-                    <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-muted)' }}>₹</span>
-                    <input type="text" inputMode="numeric" value={otherAmount} onChange={e => onOtherAmount(e.target.value.replace(/[^0-9]/g, ''))} placeholder="0" style={{ width: '100%', padding: '6px 10px 6px 24px', fontSize: 13, fontWeight: 700, border: `1.5px solid ${otherAmount ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, background: 'var(--surface)', outline: 'none' }} />
+              {selected.filter(i => i !== 'Others').map((item, idx) => {
+                const w  = weights[item] || { value: '', unit: 'kg' }
+                const kg = toKg(w.value, w.unit || 'kg')
+                return (
+                  <div key={item} style={{ display: 'grid', gridTemplateColumns: '1fr 110px 90px 80px', alignItems: 'center', padding: '9px 14px', borderTop: '1px solid var(--border-light)', background: idx % 2 === 0 ? 'var(--surface)' : 'var(--bg)', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--primary)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{item}</span>
+                      {kg > 0 && <span style={{ fontSize: 11, color: 'var(--secondary)', fontWeight: 600, marginLeft: 4 }}>= {fmt(kg)} kg</span>}
+                    </div>
+                    <input type="text" inputMode="decimal" value={w.value || ''} onChange={e => onWeight(item, { ...w, value: e.target.value.replace(/[^0-9.]/g, '') })} placeholder="0" style={{ width: '100%', padding: '6px 10px', fontSize: 13, fontWeight: 700, textAlign: 'right', border: `1.5px solid ${w.value ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, background: 'var(--surface)', outline: 'none' }} />
+                    <select value={w.unit || 'kg'} onChange={e => onWeight(item, { ...w, unit: e.target.value })} style={{ width: '100%', padding: '6px 8px', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--border)', borderRadius: 6, background: 'var(--surface)', cursor: 'pointer' }}>
+                      <option value="kg">kg</option>
+                      <option value="gm">gm</option>
+                    </select>
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button type="button" onClick={() => onToggle(item)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--danger)', background: 'var(--danger-bg)', cursor: 'pointer', color: 'var(--danger)' }}>
+                        <X size={12} />
+                      </button>
+                    </div>
                   </div>
+                )
+              })}
+
+              {/* Total weight row */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderTop: '1px solid var(--border-light)', background: totalWeight > 0 ? 'var(--secondary-light)' : 'var(--bg)', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  <Weight size={14} color={totalWeight > 0 ? 'var(--secondary)' : 'var(--text-muted)'} />
+                  <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 500 }}>Total RST Weight (excl. Others)</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 18 }}>
-                  <button type="button" onClick={() => onToggle('Others')} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 28, height: 28, borderRadius: '50%', border: '1.5px solid var(--danger)', background: 'var(--danger-bg)', cursor: 'pointer', color: 'var(--danger)' }} onMouseEnter={e => { e.currentTarget.style.background = 'var(--danger)'; e.currentTarget.style.color = '#fff' }} onMouseLeave={e => { e.currentTarget.style.background = 'var(--danger-bg)'; e.currentTarget.style.color = 'var(--danger)' }}>
-                    <X size={12} />
-                  </button>
-                </div>
+                <span style={{ fontWeight: 800, fontSize: 15, color: totalWeight > 0 ? 'var(--secondary)' : 'var(--text-muted)', fontFamily: 'var(--font-display)' }}>
+                  {totalWeight > 0 ? `${fmt(totalWeight)} kg` : '—'}
+                </span>
               </div>
-            </div>
+            </>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderTop: '1px solid var(--border-light)', background: totalWeight > 0 ? 'var(--secondary-light)' : 'var(--bg)', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <Weight size={14} color={totalWeight > 0 ? 'var(--secondary)' : 'var(--text-muted)'} />
-              <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontWeight: 500 }}>Total RST Weight (excl. Others)</span>
+          {/* "Others" multi-entry section */}
+          {selected.includes('Others') && (
+            <div style={{ borderTop: '1px solid var(--border-light)', background: 'var(--primary-light)' }}>
+              <div style={{ padding: '10px 14px 6px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--primary-dark)' }}>
+                    "Others" — Custom items (weight + negotiated amount)
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--primary)', opacity: 0.8, marginTop: 2 }}>
+                    Add one row per item. Amount is manually agreed with pickup partner.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={addOther}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 8, background: 'var(--primary)', color: '#fff', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700 }}
+                >
+                  <Plus size={12} /> Add Item
+                </button>
+              </div>
+
+              {rstOthers.length === 0 ? (
+                <div style={{ padding: '10px 14px 12px', fontSize: 12.5, color: 'var(--primary)', opacity: 0.7, fontStyle: 'italic' }}>
+                  Click "Add Item" to add a custom item →
+                </div>
+              ) : rstOthers.map((entry, i) => (
+                <div key={entry.id} style={{ margin: '0 14px 10px', padding: '10px 12px', background: 'var(--surface)', borderRadius: 8, border: '1.5px solid rgba(232,82,26,0.2)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--primary)' }}>Other Item #{i + 1}</span>
+                    <button type="button" onClick={() => removeOther(entry.id)} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, border: '1px solid var(--danger)', background: 'var(--danger-bg)', cursor: 'pointer', fontSize: 11, color: 'var(--danger)', fontWeight: 600 }}>
+                      <Trash2 size={10} /> Remove
+                    </button>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 90px 75px 100px', gap: 8, alignItems: 'end' }}>
+                    <div>
+                      <label style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Item Name <span style={{ fontWeight: 400 }}>(optional)</span></label>
+                      <input
+                        type="text"
+                        value={entry.name}
+                        onChange={e => updateOther(entry.id, 'name', e.target.value)}
+                        placeholder="e.g. Broken mirror…"
+                        style={{ width: '100%', padding: '6px 10px', fontSize: 12.5, border: '1.5px solid var(--border)', borderRadius: 6, background: 'var(--surface)', outline: 'none' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Weight</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={entry.weight}
+                        onChange={e => updateOther(entry.id, 'weight', e.target.value.replace(/[^0-9.]/g, ''))}
+                        placeholder="0"
+                        style={{ width: '100%', padding: '6px 10px', fontSize: 13, fontWeight: 700, border: `1.5px solid ${entry.weight ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, background: 'var(--surface)', outline: 'none', textAlign: 'right' }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Unit</label>
+                      <select
+                        value={entry.unit || 'kg'}
+                        onChange={e => updateOther(entry.id, 'unit', e.target.value)}
+                        style={{ width: '100%', padding: '6px 8px', fontSize: 12, fontWeight: 600, border: '1.5px solid var(--border)', borderRadius: 6, background: 'var(--surface)', cursor: 'pointer' }}
+                      >
+                        <option value="kg">kg</option>
+                        <option value="gm">gm</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>Amount (₹) *</label>
+                      <div style={{ position: 'relative' }}>
+                        <span style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--text-muted)' }}>₹</span>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={entry.amount}
+                          onChange={e => updateOther(entry.id, 'amount', e.target.value.replace(/[^0-9]/g, ''))}
+                          placeholder="0"
+                          style={{ width: '100%', paddingLeft: 24, padding: '6px 10px 6px 24px', fontSize: 13, fontWeight: 700, border: `1.5px solid ${entry.amount ? 'var(--primary)' : 'var(--border)'}`, borderRadius: 6, background: 'var(--surface)', outline: 'none' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {entry.weight && entry.unit && (
+                    <div style={{ marginTop: 6, fontSize: 11.5, color: 'var(--secondary)', fontWeight: 600 }}>
+                      = {fmt(toKg(entry.weight, entry.unit || 'kg'))} kg
+                      {entry.amount ? ` · ₹${Number(entry.amount).toLocaleString('en-IN')}` : ''}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {rstOthers.length > 0 && (
+                <div style={{ padding: '6px 14px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 700, color: 'var(--primary-dark)' }}>
+                  <span>Others subtotal:</span>
+                  <span>₹{rstOthers.reduce((s, o) => s + (Number(o.amount) || 0), 0).toLocaleString('en-IN')}</span>
+                </div>
+              )}
             </div>
-            <span style={{ fontWeight: 800, fontSize: 15, color: totalWeight > 0 ? 'var(--secondary)' : 'var(--text-muted)', fontFamily: 'var(--font-display)' }}>
-              {totalWeight > 0 ? `${totalWeight % 1 === 0 ? totalWeight : totalWeight.toFixed(3)} kg` : '—'}
-            </span>
-          </div>
+          )}
         </div>
       )}
     </div>
@@ -304,7 +376,7 @@ function RSTItemChips({ items, selected, weights, onToggle, onWeight, otherText,
 }
 
 // ─── Rate Breakdown ───────────────────────────────────────────────────────────
-function RateBreakdown({ rstItems, rstItemWeights, rateChart, otherAmount }) {
+function RateBreakdown({ rstItems, rstItemWeights, rateChart, rstOthers }) {
   if (!rateChart || rstItems.length === 0) return null
   const rows = rstItems.filter(i => i !== 'Others').map(item => {
     const w    = rstItemWeights[item] || { value: '', unit: 'kg' }
@@ -313,9 +385,13 @@ function RateBreakdown({ rstItems, rstItemWeights, rateChart, otherAmount }) {
     const amt  = rate !== null && kg > 0 ? Math.round(kg * rate) : null
     return { item, kg, rate, amt }
   }).filter(r => r.rate !== null)
-  if (rows.length === 0 && !otherAmount) return null
-  const totalAmt = rows.reduce((s, r) => s + (r.amt || 0), 0) + (Number(otherAmount) || 0)
+
+  const othersTotal = (rstOthers || []).reduce((s, o) => s + (Number(o.amount) || 0), 0)
+  if (rows.length === 0 && !othersTotal) return null
+
+  const totalAmt = rows.reduce((s, r) => s + (r.amt || 0), 0) + othersTotal
   const totalKg  = rows.reduce((s, r) => s + r.kg, 0)
+
   return (
     <div style={{ marginTop: 12, borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(27,94,53,0.25)', background: 'var(--secondary-light)' }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 80px', padding: '6px 12px', background: 'rgba(27,94,53,0.12)', fontSize: 10.5, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -329,14 +405,14 @@ function RateBreakdown({ rstItems, rstItemWeights, rateChart, otherAmount }) {
           <span style={{ fontWeight: 700, color: r.amt ? 'var(--secondary)' : 'var(--text-muted)' }}>{r.amt ? `₹${r.amt.toLocaleString('en-IN')}` : '—'}</span>
         </div>
       ))}
-      {Number(otherAmount) > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 80px', padding: '7px 12px', fontSize: 12.5, borderTop: '1px solid rgba(27,94,53,0.1)' }}>
-          <span style={{ fontWeight: 600, color: 'var(--secondary-dark)' }}>Others</span>
-          <span style={{ color: 'var(--text-muted)' }}>—</span>
+      {(rstOthers || []).filter(o => o.amount).map((o, i) => (
+        <div key={o.id} style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 80px', padding: '7px 12px', fontSize: 12.5, borderTop: '1px solid rgba(27,94,53,0.1)' }}>
+          <span style={{ fontWeight: 600, color: 'var(--secondary-dark)' }}>{o.name || `Others #${i + 1}`}</span>
+          <span style={{ color: 'var(--text-secondary)' }}>{o.weight ? `${toKg(o.weight, o.unit || 'kg').toFixed(3)}` : '—'}</span>
           <span style={{ fontSize: 10.5, color: 'var(--info)' }}>Manual</span>
-          <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>₹{Number(otherAmount).toLocaleString('en-IN')}</span>
+          <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>₹{Number(o.amount).toLocaleString('en-IN')}</span>
         </div>
-      )}
+      ))}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 70px 80px 80px', padding: '8px 12px', fontSize: 13, fontWeight: 700, borderTop: '1px solid rgba(27,94,53,0.2)', background: 'rgba(27,94,53,0.15)', color: 'var(--secondary)' }}>
         <span>Total</span>
         <span>{totalKg > 0 ? totalKg.toFixed(3) : '—'} kg</span>
@@ -347,7 +423,7 @@ function RateBreakdown({ rstItems, rstItemWeights, rateChart, otherAmount }) {
   )
 }
 
-// ─── SKS Item chips (simplified — checkbox only) ──────────────────────────────
+// ─── SKS Item chips ───────────────────────────────────────────────────────────
 function SKSItemChips({ items, selected, otherText, onChange, onOtherText }) {
   const toggle = (item) => onChange(selected.includes(item) ? selected.filter(i => i !== item) : [...selected, item])
   return (
@@ -365,7 +441,7 @@ function SKSItemChips({ items, selected, otherText, onChange, onOtherText }) {
       {selected.includes('Others') && (
         <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '9px 13px', background: 'var(--info-bg)', border: '1.5px solid var(--info)', borderRadius: 8 }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: '#1E3A8A', flexShrink: 0 }}>Specify:</span>
-          <input type="text" value={otherText} onChange={e => onOtherText(e.target.value)} placeholder="e.g. Broken mirror, Mattress…" autoFocus style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, padding: 0, color: 'var(--text-primary)' }} />
+          <input type="text" value={otherText} onChange={e => onOtherText(e.target.value)} placeholder="e.g. Broken mirror, Mattress…" autoFocus style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, padding: 0 }} />
           {otherText && <button type="button" onClick={() => onOtherText('')} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 2 }}><X size={13} /></button>}
         </div>
       )}
@@ -400,7 +476,7 @@ function PayStatusBadge({ status }) {
   return <span className={`badge ${map[status] || 'badge-muted'}`} style={{ fontSize: 11 }}>{status}</span>
 }
 
-// ─── Donor Pickup History Panel ───────────────────────────────────────────────
+// ─── Donor Pickup History ─────────────────────────────────────────────────────
 function DonorPickupHistory({ donor, pickups }) {
   if (!donor) {
     return (
@@ -409,11 +485,11 @@ function DonorPickupHistory({ donor, pickups }) {
           <History size={15} color="var(--text-muted)" />
           <div className="card-title" style={{ fontSize: 13.5, color: 'var(--text-muted)' }}>Donor Pickup History</div>
         </div>
-        <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Select a donor above to see their pickup history.</div>
+        <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Select a donor to see their pickup history.</div>
       </div>
     )
   }
-  const history = [...pickups].filter(p => p.donorId === donor.id).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  const history = [...(pickups || [])].filter(p => p.donorId === donor.id).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
   return (
     <div className="card">
       <div className="card-header">
@@ -434,7 +510,7 @@ function DonorPickupHistory({ donor, pickups }) {
         ))}
       </div>
       {history.length === 0 ? (
-        <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No pickups recorded for this donor yet.</div>
+        <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No pickups yet.</div>
       ) : (
         <div style={{ maxHeight: 360, overflowY: 'auto' }}>
           {history.map((p, i) => (
@@ -444,7 +520,7 @@ function DonorPickupHistory({ donor, pickups }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
                   {(p.orderId || p.id) && <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: 'white', background: 'var(--primary)', padding: '1px 6px', borderRadius: 4 }}>{p.orderId || p.id}</span>}
                   <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)' }}>{fmtDate(p.date)}</span>
-                  <span className={`badge ${p.status === 'Completed' ? 'badge-success' : p.status === 'Pending' ? 'badge-info' : p.status === 'Postponed' ? 'badge-warning' : 'badge-danger'}`} style={{ fontSize: 9.5 }}>{p.status}</span>
+                  <span className={`badge ${p.status === 'Completed' ? 'badge-success' : p.status === 'Pending' ? 'badge-info' : 'badge-warning'}`} style={{ fontSize: 9.5 }}>{p.status}</span>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   {p.type && <span className={`badge ${p.type === 'RST' ? 'badge-success' : p.type === 'SKS' ? 'badge-info' : 'badge-warning'}`} style={{ fontSize: 9.5 }}>{p.type}</span>}
@@ -452,7 +528,7 @@ function DonorPickupHistory({ donor, pickups }) {
                 </div>
               </div>
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                {p.totalValue > 0 ? <div style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--primary)' }}>{fmtCurrency(p.totalValue)}</div> : <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</div>}
+                {(p.totalValue || 0) > 0 ? <div style={{ fontWeight: 700, fontSize: 12.5, color: 'var(--primary)' }}>{fmtCurrency(p.totalValue)}</div> : <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</div>}
                 <span className={`badge ${p.paymentStatus === 'Paid' ? 'badge-success' : p.paymentStatus === 'Partially Paid' ? 'badge-warning' : 'badge-danger'}`} style={{ fontSize: 9 }}>{p.paymentStatus}</span>
               </div>
             </div>
@@ -467,17 +543,18 @@ function DonorPickupHistory({ donor, pickups }) {
 export default function Pickups() {
   const { donors, partners, pickups, addDonor, createPickup } = useApp()
 
-  const [form,       setForm]       = useState(EMPTY_FORM)
+  const [form,       setForm]       = useState({ ...EMPTY_FORM })
   const [saving,     setSaving]     = useState(false)
   const [errors,     setErrors]     = useState({})
   const [toast,      setToast]      = useState(null)
   const [donorModal, setDonorModal] = useState(false)
 
-  const activeDonors  = useMemo(() => donors.filter(d => d.status !== 'Lost'), [donors])
+  const activeDonors  = useMemo(() => (donors || []).filter(d => d.status !== 'Lost'), [donors])
   const selectedDonor = useMemo(() => activeDonors.find(d => d.id === form.donorId) || null, [activeDonors, form.donorId])
   const selectedKab   = useMemo(() => (partners || []).find(k => k.name === form.kabadiwala) || null, [partners, form.kabadiwala])
   const rateChart     = selectedKab?.rateChart || null
 
+  // Total weight for regular RST items
   const rstTotalWeight = useMemo(() =>
     form.rstItems.filter(i => i !== 'Others').reduce((sum, item) => {
       const w = form.rstItemWeights[item] || { value: '', unit: 'kg' }
@@ -486,7 +563,13 @@ export default function Pickups() {
     [form.rstItems, form.rstItemWeights]
   )
 
-  // Estimated value = rate-based items + Others manual amount
+  // Others total weight
+  const rstOthersWeight = useMemo(() =>
+    form.rstOthers.reduce((sum, o) => sum + toKg(o.weight, o.unit || 'kg'), 0),
+    [form.rstOthers]
+  )
+
+  // Estimated value = rate-based + all Others manual amounts
   const rstEstimatedValue = useMemo(() => {
     const rateBasedVal = rateChart
       ? form.rstItems.filter(i => i !== 'Others').reduce((sum, item) => {
@@ -495,10 +578,11 @@ export default function Pickups() {
           return sum + Math.round(kg * (rateChart[item] ?? 0))
         }, 0)
       : 0
-    return rateBasedVal + (Number(form.rstOtherAmount) || 0)
-  }, [form.rstItems, form.rstItemWeights, form.rstOtherAmount, rateChart])
+    const othersVal = form.rstOthers.reduce((s, o) => s + (Number(o.amount) || 0), 0)
+    return rateBasedVal + othersVal
+  }, [form.rstItems, form.rstItemWeights, form.rstOthers, rateChart])
 
-  // Auto-fill totalValue when rstEstimatedValue changes
+  // Auto-fill totalValue when estimated value changes
   useEffect(() => {
     if (rstEstimatedValue > 0) {
       setForm(f => ({ ...f, totalValue: String(rstEstimatedValue) }))
@@ -519,17 +603,17 @@ export default function Pickups() {
 
   const toggleRSTItem = useCallback((item) => {
     setForm(f => {
-      const next = f.rstItems.includes(item)
-        ? f.rstItems.filter(i => i !== item)
-        : [...f.rstItems, item]
+      const isOn = f.rstItems.includes(item)
+      let next = isOn ? f.rstItems.filter(i => i !== item) : [...f.rstItems, item]
       const newWeights = {}
       next.filter(i => i !== 'Others').forEach(i => { newWeights[i] = f.rstItemWeights[i] || { value: '', unit: 'kg' } })
-      return {
-        ...f, rstItems: next,
-        rstOtherText:   next.includes('Others') ? f.rstOtherText : '',
-        rstOtherAmount: next.includes('Others') ? f.rstOtherAmount : '',
-        rstItemWeights: newWeights,
-      }
+      // When toggling Others on, add one entry; when off, clear all
+      const newOthers = !isOn && item === 'Others'
+        ? [...f.rstOthers, { id: nextOtherId(), name: '', weight: '', unit: 'kg', amount: '' }]
+        : isOn && item === 'Others'
+          ? []
+          : f.rstOthers
+      return { ...f, rstItems: next, rstItemWeights: newWeights, rstOthers: newOthers }
     })
   }, [])
 
@@ -555,29 +639,43 @@ export default function Pickups() {
     if (Object.keys(e).length) { setErrors(e); return }
     setSaving(true)
     try {
-      const donor         = activeDonors.find(d => d.id === form.donorId)
+      const donor = activeDonors.find(d => d.id === form.donorId)
+      if (!donor) throw new Error('Donor not found')
       const totalValue    = Number(form.totalValue) || 0
       const amountPaid    = Number(form.amountPaid)  || 0
-      const finalRST      = form.rstItems.map(i => i === 'Others' && form.rstOtherText.trim() ? `Others (${form.rstOtherText.trim()})` : i)
-      const finalSKS      = form.sksItems.map(i => i === 'Others' && form.sksOtherText.trim() ? `Others (${form.sksOtherText.trim()})` : i)
+      const finalRST = form.rstItems.map(i => {
+        if (i === 'Others') {
+          // Build labeled list for Others entries
+          return form.rstOthers.map(o => o.name?.trim() ? `Others (${o.name.trim()})` : 'Others').join(', ') || 'Others'
+        }
+        return i
+      }).filter(Boolean)
+      const finalSKS      = form.sksItems.map(i => i === 'Others' && form.sksOtherText?.trim() ? `Others (${form.sksOtherText.trim()})` : i)
       const type          = finalRST.length > 0 && finalSKS.length > 0 ? 'RST+SKS' : finalSKS.length > 0 ? 'SKS' : 'RST'
       const paymentStatus = form.paymentStatus === 'Write Off' ? 'Write Off' : derivePayStatus(totalValue, amountPaid)
       const orderId       = generateOrderId()
+      const combinedKg    = rstTotalWeight + rstOthersWeight
+
       await createPickup({
         orderId, donorId: donor.id, donorName: donor.name,
         mobile: donor.mobile || '', society: donor.society || '',
         sector: donor.sector || '', city: donor.city || '',
         date: todayStr(), pickupMode: form.pickupMode, status: 'Completed', type,
         rstItems: finalRST, sksItems: finalSKS,
-        rstItemWeights: form.rstItemWeights, rstOtherAmount: form.rstOtherAmount,
-        rstTotalWeight: rstTotalWeight > 0 ? rstTotalWeight.toFixed(3) : '',
-        rstWeightUnit: 'kg', totalKg: rstTotalWeight,
+        rstItemWeights: form.rstItemWeights,
+        rstOthers: form.rstOthers,
+        rstTotalWeight: combinedKg > 0 ? combinedKg.toFixed(3) : '',
+        rstWeightUnit: 'kg', totalKg: combinedKg,
         totalValue, amountPaid, paymentStatus,
-        kabadiwala: form.kabadiwala, kabadiMobile: form.kabadiMobile, notes: form.notes,
+        kabadiwala: form.kabadiwala || '', kabadiMobile: form.kabadiMobile || '',
+        notes: form.notes,
       })
       setForm({ ...EMPTY_FORM })
       setErrors({})
       setToast(`Pickup recorded! Order ID: ${orderId}`)
+    } catch (err) {
+      console.error('Save error:', err)
+      setErrors({ general: 'Failed to save pickup. Please try again.' })
     } finally { setSaving(false) }
   }
 
@@ -611,17 +709,17 @@ export default function Pickups() {
           </div>
           <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
+            {errors.general && (
+              <div className="alert-strip alert-danger">
+                <AlertCircle size={13} />{errors.general}
+              </div>
+            )}
+
             {/* 1. Donor */}
             <div className="form-group" style={{ margin: 0 }}>
               <label>Donor <span className="required">*</span></label>
-              <DonorSearch donors={activeDonors} selectedId={form.donorId}
-                onSelect={id => { set('donorId', id); setErrors(e => ({ ...e, donorId: '' })) }}
-                onAddNew={() => setDonorModal(true)} />
-              {errors.donorId && (
-                <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <AlertCircle size={12} /> {errors.donorId}
-                </div>
-              )}
+              <DonorSearch donors={activeDonors} selectedId={form.donorId} onSelect={id => { set('donorId', id); setErrors(e => ({ ...e, donorId: '' })) }} onAddNew={() => setDonorModal(true)} />
+              {errors.donorId && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}><AlertCircle size={12} /> {errors.donorId}</div>}
             </div>
 
             {selectedDonor && (
@@ -633,14 +731,12 @@ export default function Pickups() {
               </div>
             )}
 
-            {/* 2. Date (locked to today) + Mode */}
+            {/* 2. Date (locked) + Mode */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>
                   Pickup Date
-                  <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--info)', marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                    🔒 Locked to today
-                  </span>
+                  <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--info)', marginLeft: 6 }}>🔒 Today only</span>
                 </label>
                 <input type="date" value={todayStr()} readOnly style={{ background: 'var(--bg)', cursor: 'not-allowed', color: 'var(--text-muted)', fontWeight: 600 }} />
               </div>
@@ -659,11 +755,7 @@ export default function Pickups() {
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <UserCheck size={13} color="var(--secondary)" />
                 Assign Pickup Partner
-                {selectedDonor?.sector && (
-                  <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--secondary)', marginLeft: 2 }}>
-                    — showing recommendations for {selectedDonor.sector}
-                  </span>
-                )}
+                {selectedDonor?.sector && <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--secondary)', marginLeft: 2 }}>— showing for {selectedDonor.sector}</span>}
               </label>
               <PartnerSearch
                 partners={partners || []}
@@ -678,9 +770,7 @@ export default function Pickups() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, padding: '7px 12px', background: 'var(--secondary-light)', borderRadius: 8, fontSize: 12, color: 'var(--secondary)' }}>
                   <Phone size={11} />
                   <span>{selectedKab.mobile}</span>
-                  <span style={{ marginLeft: 'auto', background: 'var(--secondary)', color: '#fff', borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>
-                    Rates loaded · Auto-fill ON
-                  </span>
+                  <span style={{ marginLeft: 'auto', background: 'var(--secondary)', color: '#fff', borderRadius: 6, padding: '2px 8px', fontSize: 10, fontWeight: 700 }}>Rates loaded · Auto-fill ON</span>
                 </div>
               )}
             </div>
@@ -689,29 +779,32 @@ export default function Pickups() {
             <div className="form-group" style={{ margin: 0 }}>
               <SectionLabel badge="RST" badgeClass="badge-success" title="Raddi Se Tarakki — Scrap Items" count={form.rstItems.length} />
               <RSTItemChips
-                items={RST_ITEMS} selected={form.rstItems} weights={form.rstItemWeights}
-                onToggle={toggleRSTItem} onWeight={updateRstWeight}
-                otherText={form.rstOtherText} onOtherText={v => set('rstOtherText', v)}
-                otherAmount={form.rstOtherAmount} onOtherAmount={v => set('rstOtherAmount', v)}
+                items={RST_ITEMS}
+                selected={form.rstItems}
+                weights={form.rstItemWeights}
+                onToggle={toggleRSTItem}
+                onWeight={updateRstWeight}
+                rstOthers={form.rstOthers}
+                onOthersChange={others => setForm(f => ({ ...f, rstOthers: others }))}
               />
               {rateChart && form.rstItems.length > 0 && (
                 <>
                   <div style={{ marginTop: 10, fontSize: 11.5, fontWeight: 600, color: 'var(--secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     Rate breakdown — {selectedKab?.name}
-                    <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 400, marginLeft: 4 }}>(Total auto-fills below)</span>
+                    <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 400 }}>(Total auto-fills below)</span>
                   </div>
-                  <RateBreakdown rstItems={form.rstItems} rstItemWeights={form.rstItemWeights} rateChart={rateChart} otherAmount={form.rstOtherAmount} />
+                  <RateBreakdown rstItems={form.rstItems} rstItemWeights={form.rstItemWeights} rateChart={rateChart} rstOthers={form.rstOthers} />
                 </>
               )}
               {!form.kabadiwala && form.rstItems.length > 0 && (
                 <div style={{ marginTop: 8, padding: '7px 12px', background: 'var(--warning-bg)', borderRadius: 8, fontSize: 12, color: '#92400E', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <AlertCircle size={12} />
-                  Assign a pickup partner above to see rate breakdown and auto-fill total value.
+                  Assign a pickup partner above to see rate breakdown and auto-fill total.
                 </div>
               )}
             </div>
 
-            {/* 5. SKS Items (simplified — checkboxes only) */}
+            {/* 5. SKS Items */}
             <div className="form-group" style={{ margin: 0 }}>
               <SectionLabel badge="SKS" badgeClass="badge-info" title="Sammaan Ka Saaman — Goods Donated" count={form.sksItems.length} />
               <SKSItemChips
@@ -791,12 +884,12 @@ export default function Pickups() {
             <div className="card-body" style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.8, padding: '12px 16px' }}>
               {[
                 ['1.', 'Search or add a donor.'],
-                ['2.', 'Pickup date is automatically set to today.'],
-                ['3.', 'Assign a pickup partner — rates load based on donor sector.'],
-                ['4.', 'Tick RST items and fill weights. "Others" requires a manual amount.'],
-                ['5.', 'Total Value auto-fills from rates × weights + Others amount.'],
+                ['2.', 'Pickup date is locked to today.'],
+                ['3.', 'Assign a partner — rates load by donor sector.'],
+                ['4.', 'Tick RST items, fill weights. "Others" supports multiple entries with name, weight, and a manual amount.'],
+                ['5.', 'Total Value auto-fills from rates × weights + Others amounts.'],
                 ['6.', 'Tick SKS items (checkbox only).'],
-                ['7.', 'Set payment and hit Save.'],
+                ['7.', 'Set payment details and hit Save.'],
               ].map(([n, t]) => (
                 <div key={n} style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, color: 'var(--primary)', flexShrink: 0 }}>{n}</span>

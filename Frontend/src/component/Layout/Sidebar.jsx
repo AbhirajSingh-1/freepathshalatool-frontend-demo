@@ -4,29 +4,43 @@ import {
   IndianRupee, CalendarDays, Table2, Eye,
 } from 'lucide-react'
 
-// Note: Import useRole conditionally to avoid circular deps if needed
-// For simplicity we accept a `role` prop or read from localStorage
 const getRole = () => localStorage.getItem('fp_role') || 'admin'
 
-const buildNav = (role) => [
-  { section: 'Main' },
-  { id: 'dashboard',       label: 'Dashboard',        icon: LayoutDashboard },
-  { section: 'Management' },
-  { id: 'donors',          label: 'Donors',            icon: Users },
-  { id: 'pickups',         label: 'Pickups',           icon: Truck },
-  { id: 'pickuppartners',  label: 'Pickup Partners',   icon: UserCheck },
-  { section: 'Finance' },
-  { id: 'payments',        label: 'Payment Tracking',  icon: IndianRupee },
-  { section: 'Scheduling' },
-  { id: 'pickupscheduler', label: 'Pickup Scheduler',  icon: CalendarDays },
-  // Pickup Overview only for admin/manager
-  ...(role === 'admin' || role === 'manager'
-    ? [{ id: 'pickupoverview',  label: 'Pickup Overview',   icon: Eye }]
-    : []
-  ),
-  { section: 'Insights' },
-  { id: 'raddimaster',     label: 'Raddi Master',      icon: Table2 },
-]
+const buildNav = (role) => {
+  const isAdmin     = role === 'admin'
+  const isManager   = role === 'manager'
+  const isExecutive = role === 'executive'
+
+  if (isExecutive) {
+    return [
+      { section: 'Field Operations' },
+      { id: 'pickups',        label: 'Record Pickup',    icon: Truck },
+      { id: 'pickuppartners', label: 'Pickup Partners',  icon: UserCheck },
+    ]
+  }
+
+  return [
+    { section: 'Main' },
+    { id: 'dashboard',       label: 'Dashboard',        icon: LayoutDashboard },
+    { section: 'Management' },
+    { id: 'donors',          label: 'Donors',            icon: Users },
+    { id: 'pickups',         label: 'Pickups',           icon: Truck },
+    { id: 'pickuppartners',  label: 'Pickup Partners',   icon: UserCheck },
+    { section: 'Finance' },
+    { id: 'payments',        label: 'Payment Tracking',  icon: IndianRupee },
+    { section: 'Scheduling' },
+    { id: 'pickupscheduler', label: 'Pickup Scheduler',  icon: CalendarDays },
+    ...(isAdmin || isManager
+      ? [{ id: 'pickupoverview', label: 'Pickup Overview', icon: Eye }]
+      : []
+    ),
+    { section: 'Insights' },
+    ...(isAdmin
+      ? [{ id: 'raddimaster', label: 'Raddi Master', icon: Table2 }]
+      : []
+    ),
+  ]
+}
 
 export default function Sidebar({ active, onNav, open, onClose, overdueCount, onLogoClick }) {
   const role = getRole()
@@ -41,7 +55,12 @@ export default function Sidebar({ active, onNav, open, onClose, overdueCount, on
         />
       )}
       <aside className={`sidebar ${open ? 'open' : ''}`}>
-        <div className="sidebar-brand" onClick={onLogoClick} style={{ cursor: 'pointer' }} title="Go to Dashboard">
+        <div
+          className="sidebar-brand"
+          onClick={onLogoClick}
+          style={{ cursor: 'pointer' }}
+          title="Go to Home"
+        >
           <div className="sidebar-logo">
             <div className="logo-icon">F</div>
             <div>
@@ -77,7 +96,7 @@ export default function Sidebar({ active, onNav, open, onClose, overdueCount, on
           <div className="sidebar-footer-info">
             <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>FreePathshala NGO</div>
             <div>12A &amp; 80G Certified</div>
-            <div style={{ marginTop: 2 }}>v2.0.0</div>
+            <div style={{ marginTop: 2 }}>v2.1.0</div>
           </div>
         </div>
       </aside>
