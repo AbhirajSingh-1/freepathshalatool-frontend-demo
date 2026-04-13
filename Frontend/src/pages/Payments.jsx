@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { fmtDate, fmtCurrency, paymentStatusColor, exportToExcel } from '../utils/helpers'
-import { RADDI_ITEM_LABELS } from '../data/raddimockData'
+import { RADDI_ITEM_LABELS } from '../data/temp'
 
 const REF_MODES = [
   { value: 'upi',    label: 'UPI',       icon: Smartphone,  placeholder: 'UPI transaction ID' },
