@@ -9,15 +9,11 @@ const PAGE_META = {
   payments:        { title: 'Payment Tracking',       sub: 'Track & update pickup partner payments' },
   pickupscheduler: { title: 'Pickup Scheduler',       sub: 'Schedule pickups for donors' },
   pickupoverview:  { title: 'Pickup Overview',        sub: 'Individual & drive analytics — admin view' },
-  kabadipickups:   { title: 'Pickup Partner List',    sub: 'Date-wise pickup schedule' },
-  customerpickups: { title: 'Donor Pickup History',   sub: 'Date-wise donor pickup tracker' },
-  whatsapp:        { title: 'WhatsApp',               sub: 'Communication templates' },
-  reports:         { title: 'Reports',                sub: 'Analytics & insights' },
   raddimaster:     { title: 'Raddi Master',           sub: 'Complete pickup data — all orders in one view' },
-  lostpostponed:   { title: 'Lost & Postponed',       sub: 'Inactive donor management' },
+  sksoverview:     { title: 'SKS Overview',           sub: 'Warehouse tracking for donated goods' },
 }
 
-export default function Header({ page, onMenuClick, onAddDonor }) {
+export default function Header({ page, onMenuClick }) {
   const meta = PAGE_META[page] || {}
 
   return (
@@ -36,11 +32,6 @@ export default function Header({ page, onMenuClick, onAddDonor }) {
       </div>
 
       <div className="header-actions">
-        {page === 'donors' && (
-          <button className="btn btn-primary btn-sm" onClick={onAddDonor}>
-            + Add Donor
-          </button>
-        )}
         <button className="btn btn-ghost btn-icon" title="Notifications">
           <Bell size={18} />
         </button>

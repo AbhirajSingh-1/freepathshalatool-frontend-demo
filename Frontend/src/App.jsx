@@ -12,6 +12,7 @@ import Payments           from './pages/Payments'
 import PickupScheduler    from './pages/PickupScheduler'
 import PickupOverview     from './pages/PickupOverview'
 import RaddiMaster        from './pages/RaddiMaster'
+import SKSOverview        from './pages/SKSOverview'
 
 const PAGES = {
   dashboard:       Dashboard,
@@ -22,11 +23,7 @@ const PAGES = {
   pickupscheduler: PickupScheduler,
   pickupoverview:  PickupOverview,
   raddimaster:     RaddiMaster,
-}
-
-function getPageFromHash() {
-  const hash = window.location.hash.replace('#', '')
-  return PAGES[hash] ? hash : 'dashboard'
+  sksoverview:     SKSOverview,
 }
 
 // ── Role Switcher (demo widget) ───────────────────────────────────────────────
@@ -106,19 +103,23 @@ function AccessDenied({ onBack }) {
 function AppShell() {
   const { can, role, ROLE_PAGES, DEFAULT_PAGE } = useRole()
 
-  // Resolve initial page based on role
+  const ROLE_PAGES_EXTENDED = {
+    admin:     [...(ROLE_PAGES.admin || []), 'sksoverview'],
+    manager:   [...(ROLE_PAGES.manager || []), 'sksoverview'],
+    executive: ROLE_PAGES.executive || [],
+  }
+
   const getValidPage = (hash) => {
     const page = PAGES[hash] ? hash : DEFAULT_PAGE[role] || 'pickups'
-    return can.canAccessPage(page) ? page : (DEFAULT_PAGE[role] || 'pickups')
+    return ROLE_PAGES_EXTENDED[role]?.includes(page) ? page : (DEFAULT_PAGE[role] || 'pickups')
   }
 
   const [page, setPage]      = useState(() => getValidPage(window.location.hash.replace('#', '')))
   const [sidebarOpen, setSO] = useState(false)
   const [addDonor, setAddD]  = useState(false)
 
-  // When role changes, redirect if current page is no longer accessible
   useEffect(() => {
-    if (!can.canAccessPage(page)) {
+    if (!ROLE_PAGES_EXTENDED[role]?.includes(page)) {
       const fallback = DEFAULT_PAGE[role] || 'pickups'
       setPage(fallback)
       window.location.hash = fallback
@@ -126,7 +127,7 @@ function AppShell() {
   }, [role]) // eslint-disable-line
 
   const navigate = (p) => {
-    if (!can.canAccessPage(p)) return
+    if (!ROLE_PAGES_EXTENDED[role]?.includes(p)) return
     setPage(p)
     window.location.hash = p
     setSO(false)
@@ -143,8 +144,8 @@ function AppShell() {
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [role]) // eslint-disable-line
 
-  const PageComponent = PAGES[page] || Dashboard
-  const isAccessible  = can.canAccessPage(page)
+  const PageComponent  = PAGES[page] || Dashboard
+  const isAccessible   = ROLE_PAGES_EXTENDED[role]?.includes(page)
 
   return (
     <div className="app-layout">
@@ -154,6 +155,7 @@ function AppShell() {
         open={sidebarOpen}
         onClose={() => setSO(false)}
         onLogoClick={() => navigate(DEFAULT_PAGE[role] || 'pickups')}
+        role={role}
       />
       <div className="main-content">
         <Header

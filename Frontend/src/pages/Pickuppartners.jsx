@@ -1,25 +1,24 @@
 // Frontend/src/pages/Pickuppartners.jsx
-// Crash-proof: null checks, optional chaining, month-based filters, role-aware UI
+// Crash-proof: removed require() calls, top-level imports, full null safety
 import { useState, useMemo, useCallback } from 'react'
 import {
   Phone, Plus, Edit2, Trash2, X, Star, Mail,
   IndianRupee, TrendingUp, Clock, CheckCircle,
   BarChart3, ChevronDown, ChevronUp, Package, AlertCircle,
-  MapPin, Eye, ShieldAlert,
+  MapPin, Eye,
 } from 'lucide-react'
 import { useApp }  from '../context/AppContext'
 import { useRole } from '../context/RoleContext'
 import { fmtDate, fmtCurrency } from '../utils/helpers'
-import { CITY_SECTORS } from '../data/mockData'
+import { CITY_SECTORS, GURGAON_SOCIETIES } from '../data/mockData'
 
-// Rate chart items — "Others" intentionally excluded
 const RATE_CHART_ITEMS = [
   'Glass Bottle', 'Glass Other', 'Plastic Bottle / Box', 'Other Plastic',
   'Paper', 'Cardboard Box', 'Iron', 'E-Waste', 'Wood',
 ]
 
 const DEFAULT_RATE_CHART = Object.fromEntries(
-  RATE_CHART_ITEMS.map(k => [k, { 'Glass Bottle': 2, 'Glass Other': 1, 'Plastic Bottle / Box': 8, 'Other Plastic': 5, 'Paper': 12, 'Cardboard Box': 10, 'Iron': 25, 'E-Waste': 15, 'Wood': 3 }[k] || 0])
+  RATE_CHART_ITEMS.map(k => [k, ({ 'Glass Bottle': 2, 'Glass Other': 1, 'Plastic Bottle / Box': 8, 'Other Plastic': 5, 'Paper': 12, 'Cardboard Box': 10, 'Iron': 25, 'E-Waste': 15, 'Wood': 3 })[k] || 0])
 )
 
 const GURGAON_SECTORS = CITY_SECTORS['Gurgaon'] || []
@@ -31,7 +30,6 @@ const EMPTY = {
   rateChart: { ...DEFAULT_RATE_CHART },
 }
 
-// ── Month helpers ─────────────────────────────────────────────────────────────
 const padM = (n) => String(n).padStart(2, '0')
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -60,7 +58,7 @@ function RateChartMini({ rateChart, expanded, onToggle }) {
       </button>
       {expanded && (
         <div style={{ marginTop: 8, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border-light)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', padding: '5px 10px', background: 'var(--secondary-light)', fontSize: 10.5, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', padding: '5px 10px', background: 'var(--secondary-light)', fontSize: 10.5, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase' }}>
             <span>Item</span><span style={{ textAlign: 'right' }}>₹/kg</span>
           </div>
           {entries.map(([item, rate], i) => (
@@ -75,12 +73,12 @@ function RateChartMini({ rateChart, expanded, onToggle }) {
   )
 }
 
-// ── Rate Chart editor (no Others) ─────────────────────────────────────────────
+// ── Rate Chart editor ─────────────────────────────────────────────────────────
 function RateChartEditor({ rateChart, onChange }) {
   const safe = rateChart || {}
   return (
     <div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', padding: '6px 10px', background: 'var(--secondary-light)', borderRadius: '8px 8px 0 0', fontSize: 10.5, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', padding: '6px 10px', background: 'var(--secondary-light)', borderRadius: '8px 8px 0 0', fontSize: 10.5, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase' }}>
         <span>Item</span><span style={{ textAlign: 'right' }}>Rate (₹/kg)</span>
       </div>
       <div style={{ border: '1px solid var(--border-light)', borderTop: 'none', borderRadius: '0 0 8px 8px', overflow: 'hidden' }}>
@@ -103,27 +101,22 @@ function RateChartEditor({ rateChart, onChange }) {
   )
 }
 
-// ── Coverage Selector ─────────────────────────────────────────────────────────
+// ── Coverage Selector — using top-level import instead of require() ────────────
 function CoverageSelector({ sectors, societies, onSectors, onSocieties }) {
   const [openSec, setOpenSec] = useState(false)
-
-  const safeSectors   = sectors   || []
-  const safeSocieties = societies || []
+  const safeSectors   = Array.isArray(sectors)   ? sectors   : []
+  const safeSocieties = Array.isArray(societies) ? societies : []
 
   const availableSocieties = useMemo(() => {
     if (!safeSectors.length) return []
-    // Inline GURGAON_SOCIETIES data for simplicity
-    const { GURGAON_SOCIETIES } = require('../data/mockData')
     return safeSectors.flatMap(s => (GURGAON_SOCIETIES || {})[s] || [])
   }, [safeSectors])
 
   const toggleSector = (s) => {
     if (safeSectors.includes(s)) {
       onSectors(safeSectors.filter(x => x !== s))
-      try {
-        const { GURGAON_SOCIETIES } = require('../data/mockData')
-        onSocieties(safeSocieties.filter(soc => !((GURGAON_SOCIETIES || {})[s] || []).includes(soc)))
-      } catch { onSocieties([]) }
+      const removedSocs = (GURGAON_SOCIETIES || {})[s] || []
+      onSocieties(safeSocieties.filter(soc => !removedSocs.includes(soc)))
     } else {
       if (safeSectors.length >= 2) return
       onSectors([...safeSectors, s])
@@ -147,10 +140,7 @@ function CoverageSelector({ sectors, societies, onSectors, onSocieties }) {
           <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>Max 2 sectors</span>
         </label>
         <div style={{ position: 'relative' }}>
-          <div
-            onClick={() => setOpenSec(o => !o)}
-            style={{ padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', background: 'var(--surface)', minHeight: 40, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}
-          >
+          <div onClick={() => setOpenSec(o => !o)} style={{ padding: '9px 12px', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', background: 'var(--surface)', minHeight: 40, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
             {safeSectors.length === 0 ? (
               <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>Select up to 2 sectors…</span>
             ) : safeSectors.map(s => (
@@ -197,7 +187,7 @@ function CoverageSelector({ sectors, societies, onSectors, onSocieties }) {
   )
 }
 
-// ── Monthly performance (null-safe) ───────────────────────────────────────────
+// ── Monthly performance ───────────────────────────────────────────────────────
 function PartnerMonthlyReport({ partner, raddiRecords, monthFilter }) {
   const monthly = useMemo(() => {
     if (!partner?.name || !Array.isArray(raddiRecords)) return []
@@ -205,8 +195,7 @@ function PartnerMonthlyReport({ partner, raddiRecords, monthFilter }) {
       if (r.kabadiwalaName !== partner.name) return false
       if (!monthFilter) return true
       const { from, to } = getMonthRange(monthFilter)
-      const d = r.pickupDate || ''
-      return d >= from && d <= to
+      return (r.pickupDate || '') >= from && (r.pickupDate || '') <= to
     })
     const m = {}
     records.forEach(r => {
@@ -226,9 +215,7 @@ function PartnerMonthlyReport({ partner, raddiRecords, monthFilter }) {
   return (
     <div className="table-wrap" style={{ border: 'none', boxShadow: 'none', borderRadius: 0 }}>
       <table>
-        <thead>
-          <tr><th>Month</th><th>Pickups</th><th>Kg</th><th>Total (₹)</th><th>Received</th><th>Pending</th></tr>
-        </thead>
+        <thead><tr><th>Month</th><th>Pickups</th><th>Kg</th><th>Total (₹)</th><th>Received</th><th>Pending</th></tr></thead>
         <tbody>
           {monthly.map(m => (
             <tr key={m.month}>
@@ -248,7 +235,6 @@ function PartnerMonthlyReport({ partner, raddiRecords, monthFilter }) {
   )
 }
 
-// ── Payment summary cards (null-safe) ─────────────────────────────────────────
 function PartnerPaymentSummaryCards({ partner, raddiRecords, monthFilter }) {
   const stats = useMemo(() => {
     if (!partner?.name || !Array.isArray(raddiRecords)) return { totalPickups: 0, totalAmount: 0, received: 0, pending: 0 }
@@ -256,11 +242,10 @@ function PartnerPaymentSummaryCards({ partner, raddiRecords, monthFilter }) {
       if (r.kabadiwalaName !== partner.name) return false
       if (!monthFilter) return true
       const { from, to } = getMonthRange(monthFilter)
-      const d = r.pickupDate || ''
-      return d >= from && d <= to
+      return (r.pickupDate || '') >= from && (r.pickupDate || '') <= to
     })
-    const totalAmount  = records.reduce((s, r) => s + (r.totalAmount || 0), 0)
-    const received     = records.filter(r => r.paymentStatus === 'Received').reduce((s, r) => s + (r.totalAmount || 0), 0)
+    const totalAmount = records.reduce((s, r) => s + (r.totalAmount || 0), 0)
+    const received    = records.filter(r => r.paymentStatus === 'Received').reduce((s, r) => s + (r.totalAmount || 0), 0)
     return { totalPickups: records.length, totalAmount, received, pending: totalAmount - received }
   }, [raddiRecords, partner?.name, monthFilter])
 
@@ -297,7 +282,6 @@ export default function PickupPartners() {
   } = useApp()
   const { can } = useRole()
 
-  // Safe partners list
   const partners = useMemo(() => Array.isArray(rawPartners) ? rawPartners : [], [rawPartners])
 
   const [view,           setView]           = useState('directory')
@@ -310,42 +294,39 @@ export default function PickupPartners() {
   const [showRateEditor, setShowRateEditor] = useState(false)
   const [error,          setError]          = useState('')
 
-  // Month filter (last 5 months default = show all 5)
   const last5Months  = getLast5Months()
-  const [monthFilter, setMonthFilter] = useState('') // '' = all time
+  const [monthFilter, setMonthFilter] = useState('')
 
   const open = useCallback((k = null) => {
-    try {
-      setEditing(k)
-      setError('')
-      setShowRateEditor(false)
-      setForm(k ? {
+    setEditing(k)
+    setError('')
+    setShowRateEditor(false)
+    if (k) {
+      setForm({
         name:      k.name      || '',
         mobile:    k.mobile    || '',
         email:     k.email     || '',
-        sectors:   Array.isArray(k.sectors)   ? k.sectors   : [],
-        societies: Array.isArray(k.societies) ? k.societies : [],
+        sectors:   Array.isArray(k.sectors)   ? [...k.sectors]   : [],
+        societies: Array.isArray(k.societies) ? [...k.societies] : [],
         area:      k.area      || '',
         rateChart: { ...DEFAULT_RATE_CHART, ...(k.rateChart || {}) },
-      } : { ...EMPTY, rateChart: { ...DEFAULT_RATE_CHART } })
-      setModal(true)
-    } catch (err) {
-      console.error('Error opening partner modal:', err)
-      setError('Failed to open form. Please try again.')
+      })
+    } else {
+      setForm({ ...EMPTY, rateChart: { ...DEFAULT_RATE_CHART } })
     }
+    setModal(true)
   }, [])
 
   const close = useCallback(() => {
     setModal(false)
     setEditing(null)
     setError('')
+    setShowRateEditor(false)
   }, [])
 
   const save = useCallback(async () => {
-    if (!form.name?.trim() || !form.mobile?.trim()) {
-      setError('Name and mobile are required.')
-      return
-    }
+    if (!form.name?.trim()) { setError('Name is required.'); return }
+    if (!form.mobile?.trim()) { setError('Mobile number is required.'); return }
     setSaving(true)
     setError('')
     try {
@@ -366,7 +347,7 @@ export default function PickupPartners() {
 
   const removeK = useCallback(async (id) => {
     if (!can.deletePartner) return
-    if (!window.confirm('Remove this pickup partner? This cannot be undone.')) return
+    if (!window.confirm('Remove this pickup partner?')) return
     try {
       await deletePartner(id)
       if (selectedK?.id === id) setSelectedK(null)
@@ -379,7 +360,6 @@ export default function PickupPartners() {
     setExpandedRates(prev => ({ ...prev, [id]: !prev[id] }))
   }, [])
 
-  // Safe aggregates
   const totals = useMemo(() => {
     if (!Array.isArray(raddiRecords)) return { earnings: 0, pending: 0, pickups: 0, scrapValue: 0 }
     const filtered = monthFilter
@@ -388,18 +368,16 @@ export default function PickupPartners() {
           return (r.pickupDate || '') >= from && (r.pickupDate || '') <= to
         })
       : raddiRecords
-
     return {
       earnings:   filtered.filter(r => r.paymentStatus === 'Received').reduce((s, r) => s + (r.totalAmount || 0), 0),
       pending:    filtered.filter(r => r.paymentStatus !== 'Received').reduce((s, r) => s + (r.totalAmount || 0), 0),
       pickups:    filtered.length,
       scrapValue: filtered.reduce((s, r) => s + (r.totalAmount || 0), 0),
     }
-  }, [partners, raddiRecords, monthFilter])
+  }, [raddiRecords, monthFilter])
 
   return (
     <div className="page-body">
-      {/* Executive notice */}
       {!can.viewPartnerReports && (
         <div className="alert-strip alert-info" style={{ marginBottom: 16 }}>
           <Eye size={14} />
@@ -407,12 +385,9 @@ export default function PickupPartners() {
         </div>
       )}
 
-      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div className="tabs" style={{ marginBottom: 0 }}>
-          <button className={`tab ${view === 'directory' ? 'active' : ''}`} onClick={() => setView('directory')}>
-            Directory
-          </button>
+          <button className={`tab ${view === 'directory' ? 'active' : ''}`} onClick={() => setView('directory')}>Directory</button>
           {can.viewPartnerReports && (
             <button className={`tab ${view === 'reports' ? 'active' : ''}`} onClick={() => setView('reports')}>
               <BarChart3 size={13} style={{ marginRight: 4 }} /> Reports
@@ -424,7 +399,6 @@ export default function PickupPartners() {
         </button>
       </div>
 
-      {/* Month filter (visible in reports view) */}
       {view === 'reports' && can.viewPartnerReports && (
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16, padding: '10px 14px', background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border-light)' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Period:</span>
@@ -432,12 +406,7 @@ export default function PickupPartners() {
           {last5Months.map(ym => {
             const [y, m] = ym.split('-')
             return (
-              <button
-                key={ym}
-                className={`btn btn-sm ${monthFilter === ym ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ fontSize: 11.5 }}
-                onClick={() => setMonthFilter(ym)}
-              >
+              <button key={ym} className={`btn btn-sm ${monthFilter === ym ? 'btn-primary' : 'btn-ghost'}`} style={{ fontSize: 11.5 }} onClick={() => setMonthFilter(ym)}>
                 {MONTHS_SHORT[+m - 1]} {y}
               </button>
             )
@@ -455,11 +424,10 @@ export default function PickupPartners() {
               <p>Add your first pickup partner to start assigning pickups.</p>
             </div>
           ) : partners.map(k => {
-            if (!k) return null
+            if (!k?.id) return null
             return (
-              <div key={k.id || k.name} className="card">
+              <div key={k.id} className="card">
                 <div className="card-body">
-                  {/* Header row */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 14 }}>
                     <div style={{ width: 48, height: 48, background: 'var(--secondary-light)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700, color: 'var(--secondary)', flexShrink: 0 }}>
                       {(k.name || '?')[0].toUpperCase()}
@@ -495,8 +463,7 @@ export default function PickupPartners() {
                     </div>
                   </div>
 
-                  {/* Coverage chips */}
-                  {(Array.isArray(k.sectors) && k.sectors.length > 0) || k.area ? (
+                  {((Array.isArray(k.sectors) && k.sectors.length > 0) || k.area) && (
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
                       <MapPin size={11} color="var(--text-muted)" style={{ marginTop: 2, flexShrink: 0 }} />
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -506,7 +473,7 @@ export default function PickupPartners() {
                         {!(k.sectors?.length) && k.area && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{k.area}</span>}
                       </div>
                     </div>
-                  ) : null}
+                  )}
 
                   <PartnerPaymentSummaryCards partner={k} raddiRecords={raddiRecords || []} monthFilter="" />
                   <RateChartMini rateChart={k.rateChart} expanded={!!expandedRates[k.id]} onToggle={() => toggleRate(k.id)} />
@@ -517,10 +484,9 @@ export default function PickupPartners() {
         </div>
       )}
 
-      {/* ══ REPORTS VIEW (Admin/Manager) ══ */}
+      {/* ══ REPORTS VIEW ══ */}
       {view === 'reports' && can.viewPartnerReports && (
         <div>
-          {/* Summary KPIs */}
           <div className="stat-grid" style={{ marginBottom: 24 }}>
             <div className="stat-card green"><div className="stat-icon"><IndianRupee size={18} /></div><div className="stat-value">{fmtCurrency(totals.earnings)}</div><div className="stat-label">Total Received</div></div>
             <div className="stat-card red"><div className="stat-icon"><Clock size={18} /></div><div className="stat-value">{fmtCurrency(totals.pending)}</div><div className="stat-label">Total Pending</div></div>
@@ -528,17 +494,15 @@ export default function PickupPartners() {
             <div className="stat-card blue"><div className="stat-icon"><CheckCircle size={18} /></div><div className="stat-value">{totals.pickups}</div><div className="stat-label">Total Pickups</div></div>
           </div>
 
-          {/* Partner selector */}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>
             <button className={`btn btn-sm ${!selectedK ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedK(null)}>All Partners</button>
-            {partners.map(k => k && (
+            {partners.filter(Boolean).map(k => (
               <button key={k.id} className={`btn btn-sm ${selectedK?.id === k.id ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedK(k)}>
                 {k.name}
               </button>
             ))}
           </div>
 
-          {/* Per-partner cards */}
           {(selectedK ? [selectedK] : partners).filter(Boolean).map(k => {
             const liveRecords  = (raddiRecords || []).filter(r => r.kabadiwalaName === k.name)
             const liveFiltered = monthFilter
@@ -550,7 +514,6 @@ export default function PickupPartners() {
             const liveTotal    = liveFiltered.reduce((s, r) => s + (r.totalAmount || 0), 0)
             const liveReceived = liveFiltered.filter(r => r.paymentStatus === 'Received').reduce((s, r) => s + (r.totalAmount || 0), 0)
             const livePending  = liveTotal - liveReceived
-
             return (
               <div key={k.id || k.name} className="card" style={{ marginBottom: 20 }}>
                 <div className="card-header" style={{ flexWrap: 'wrap', gap: 12 }}>
@@ -560,7 +523,7 @@ export default function PickupPartners() {
                       <div className="card-title">{k.name}</div>
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {k.mobile}{k.email ? ` · ${k.email}` : ''}{k.area ? ` · ${k.area}` : ''}
+                      {k.mobile}{k.email ? ` · ${k.email}` : ''}
                       {monthFilter ? <span style={{ marginLeft: 8, color: 'var(--primary)', fontWeight: 600 }}>({MONTHS_SHORT[+monthFilter.split('-')[1] - 1]} {monthFilter.split('-')[0]})</span> : null}
                     </div>
                   </div>
@@ -571,45 +534,13 @@ export default function PickupPartners() {
                   </div>
                   {can.editPartner && <button className="btn btn-ghost btn-sm" onClick={() => open(k)}><Edit2 size={12} /> Edit</button>}
                 </div>
-
                 <div style={{ padding: '0' }}>
                   <div style={{ padding: '10px 20px 6px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Monthly Breakdown</div>
                   <PartnerMonthlyReport partner={k} raddiRecords={raddiRecords || []} monthFilter={monthFilter} />
                 </div>
-
                 {k.rateChart && (
                   <div style={{ padding: '8px 20px 0' }}>
-                    <RateChartMini
-                      rateChart={k.rateChart}
-                      expanded={!!expandedRates[`report-${k.id}`]}
-                      onToggle={() => setExpandedRates(prev => ({ ...prev, [`report-${k.id}`]: !prev[`report-${k.id}`] }))}
-                    />
-                  </div>
-                )}
-
-                {/* Transactions */}
-                {Array.isArray(k.transactions) && k.transactions.length > 0 && (
-                  <div className="table-wrap" style={{ border: 'none', boxShadow: 'none', borderRadius: 0, marginTop: 8 }}>
-                    <table>
-                      <thead>
-                        <tr><th>Pickup ID</th><th>Date</th><th>Donor</th><th>RST Value</th><th>Paid</th><th>Due</th><th>Status</th></tr>
-                      </thead>
-                      <tbody>
-                        {k.transactions.map((tx, i) => (
-                          <tr key={i}>
-                            <td><span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-muted)' }}>{tx.pickupId || '—'}</span></td>
-                            <td style={{ fontSize: 12.5 }}>{fmtDate(tx.date)}</td>
-                            <td style={{ fontWeight: 600 }}>{tx.donor || '—'}</td>
-                            <td style={{ fontWeight: 600 }}>{fmtCurrency(tx.value)}</td>
-                            <td style={{ color: 'var(--secondary)', fontWeight: 600 }}>{fmtCurrency(tx.paid)}</td>
-                            <td style={{ color: 'var(--danger)', fontWeight: 700 }}>
-                              {(tx.value || 0) > (tx.paid || 0) ? fmtCurrency((tx.value || 0) - (tx.paid || 0)) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                            </td>
-                            <td><span className={`badge ${tx.status === 'Paid' ? 'badge-success' : tx.status === 'Partially Paid' ? 'badge-warning' : 'badge-danger'}`}>{tx.status}</span></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    <RateChartMini rateChart={k.rateChart} expanded={!!expandedRates[`report-${k.id}`]} onToggle={() => setExpandedRates(prev => ({ ...prev, [`report-${k.id}`]: !prev[`report-${k.id}`] }))} />
                   </div>
                 )}
               </div>
@@ -624,6 +555,7 @@ export default function PickupPartners() {
           <div className="modal modal-lg" style={{ maxWidth: 700, width: '95vw' }}>
             <div className="modal-header">
               <div className="modal-title">{editing ? 'Edit Pickup Partner' : 'Add Pickup Partner'}</div>
+              {editing?.id && <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 800, color: 'white', background: 'var(--secondary)', padding: '2px 8px', borderRadius: 5 }}>{editing.id}</span>}
               <button className="btn btn-ghost btn-icon btn-sm" onClick={close}><X size={16} /></button>
             </div>
             <div className="modal-body" style={{ overflowY: 'auto', maxHeight: '72vh' }}>
@@ -647,7 +579,6 @@ export default function PickupPartners() {
                 </div>
               </div>
 
-              {/* Coverage */}
               <div style={{ marginBottom: 16, padding: 14, background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border-light)' }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>Coverage Area</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>Select up to 2 sectors and 5 societies this partner covers.</div>
@@ -659,12 +590,11 @@ export default function PickupPartners() {
                 />
               </div>
 
-              {/* Rate Chart */}
               <div style={{ marginBottom: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <div>
                     <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>Rate Chart</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Per-kg rates for each RST item (Others handled at pickup time)</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Per-kg rates for each RST item</div>
                   </div>
                   <button type="button" onClick={() => setShowRateEditor(v => !v)} className={`btn btn-sm ${showRateEditor ? 'btn-outline' : 'btn-ghost'}`} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     {showRateEditor ? <ChevronUp size={13} /> : <ChevronDown size={13} />}

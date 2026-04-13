@@ -18,7 +18,7 @@ let _otherId = 0
 const nextOtherId = () => ++_otherId
 
 const EMPTY_FORM = {
-  donorId: '', pickupMode: 'Individual',
+  donorId: '', pickupMode: 'Drive',
   kabadiwala: '', kabadiMobile: '',
   rstItems: [], rstItemWeights: {},
   rstOthers: [],          // Array of { id, name, weight, unit, amount }

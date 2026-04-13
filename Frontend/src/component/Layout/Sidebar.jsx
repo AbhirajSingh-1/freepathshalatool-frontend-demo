@@ -1,7 +1,7 @@
 // Frontend/src/component/Layout/Sidebar.jsx
 import {
   LayoutDashboard, Users, Truck, UserCheck, BarChart3,
-  IndianRupee, CalendarDays, Table2, Eye,
+  IndianRupee, CalendarDays, Table2, Eye, Shirt,
 } from 'lucide-react'
 
 const getRole = () => localStorage.getItem('fp_role') || 'admin'
@@ -35,6 +35,10 @@ const buildNav = (role) => {
       : []
     ),
     { section: 'Insights' },
+    ...(isAdmin || isManager
+      ? [{ id: 'sksoverview', label: 'SKS Overview', icon: Shirt }]
+      : []
+    ),
     ...(isAdmin
       ? [{ id: 'raddimaster', label: 'Raddi Master', icon: Table2 }]
       : []
@@ -42,9 +46,9 @@ const buildNav = (role) => {
   ]
 }
 
-export default function Sidebar({ active, onNav, open, onClose, overdueCount, onLogoClick }) {
-  const role = getRole()
-  const NAV  = buildNav(role)
+export default function Sidebar({ active, onNav, open, onClose, overdueCount, onLogoClick, role }) {
+  const _role = role || getRole()
+  const NAV   = buildNav(_role)
 
   return (
     <>
@@ -96,7 +100,7 @@ export default function Sidebar({ active, onNav, open, onClose, overdueCount, on
           <div className="sidebar-footer-info">
             <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>FreePathshala NGO</div>
             <div>12A &amp; 80G Certified</div>
-            <div style={{ marginTop: 2 }}>v2.1.0</div>
+            <div style={{ marginTop: 2 }}>v2.2.0</div>
           </div>
         </div>
       </aside>

@@ -9,8 +9,8 @@ export const ROLES = {
 
 // Pages each role may access
 export const ROLE_PAGES = {
-  admin:     ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'raddimaster'],
-  manager:   ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview'],
+  admin:     ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'raddimaster', 'sksoverview'],
+  manager:   ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'sksoverview'],
   executive: ['pickups', 'pickuppartners'],
 }
 
@@ -38,7 +38,6 @@ export function RoleProvider({ children }) {
   }
 
   const can = {
-    // Page / section visibility
     viewDashboard:      role === 'admin' || role === 'manager',
     viewDonors:         role === 'admin' || role === 'manager',
     viewPayments:       role === 'admin' || role === 'manager',
@@ -48,8 +47,8 @@ export function RoleProvider({ children }) {
     viewFinancials:     role === 'admin' || role === 'manager',
     viewPickupOverview: role === 'admin' || role === 'manager',
     viewPartnerReports: role === 'admin' || role === 'manager',
+    viewSKSOverview:    role === 'admin' || role === 'manager',
 
-    // Actions
     deletePartner:   role === 'admin',
     deletePickup:    role === 'admin',
     deleteDonor:     role === 'admin' || role === 'manager',
@@ -59,7 +58,6 @@ export function RoleProvider({ children }) {
     schedulePickup:  role === 'admin' || role === 'manager',
     manageDonors:    role === 'admin' || role === 'manager',
 
-    // Helper: is a given page accessible for current role?
     canAccessPage: (page) => (ROLE_PAGES[role] || []).includes(page),
   }
 

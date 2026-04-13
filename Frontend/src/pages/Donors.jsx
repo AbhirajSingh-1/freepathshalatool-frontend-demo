@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react'
 import {
   Search, Plus, Edit2, Trash2, X, Phone, MapPin,
   AlertTriangle, SlidersHorizontal, Clock, CheckCircle,
-  AlertCircle, UserX,
+  AlertCircle, UserX, Heart, ThumbsUp,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import {
@@ -36,10 +36,88 @@ function daysSince(dateStr) {
   return differenceInDays(new Date(), parseISO(dateStr))
 }
 
+// ── Donor category logic (computed from pickups, never stored) ────────────────
+/**
+ * Returns: 'both' | 'supporter' | 'contributor' | null
+ * - contributor (👍): has RST/SKS pickups
+ * - supporter (❤️): has supportContribution text OR "Others" in RST items
+ * - both (❤️👍): has both
+ */
+function getDonorCategory(donor, donorPickups) {
+  const completed = donorPickups.filter(p => p.status === 'Completed')
+
+  const hasContrib = completed.some(p =>
+    (p.rstItems?.length > 0 && (p.type === 'RST' || p.type === 'RST+SKS')) ||
+    (p.sksItems?.length > 0 && (p.type === 'SKS' || p.type === 'RST+SKS')) ||
+    p.totalValue > 0
+  )
+
+  const hasSupport =
+    !!(donor.supportContribution?.trim()) ||
+    completed.some(p => p.rstItems?.includes('Others') || p.sksItems?.some(i => i?.startsWith('Others')))
+
+  if (hasContrib && hasSupport) return 'both'
+  if (hasSupport)               return 'supporter'
+  if (hasContrib)               return 'contributor'
+  return null
+}
+
+// ── Category badge component ──────────────────────────────────────────────────
+function CategoryBadge({ category }) {
+  if (!category) return null
+
+  const configs = {
+    both: {
+      label: '❤️ 👍',
+      title: 'Supporter + Contributor (RST/SKS & Support)',
+      bg: 'linear-gradient(135deg, #FDE7DA 0%, #E8F5EE 100%)',
+      border: '1px solid rgba(232,82,26,0.25)',
+      color: 'var(--text-secondary)',
+    },
+    supporter: {
+      label: '❤️',
+      title: 'Supporter (donated goods/money)',
+      bg: 'var(--danger-bg)',
+      border: '1px solid rgba(239,68,68,0.25)',
+      color: '#991B1B',
+    },
+    contributor: {
+      label: '👍',
+      title: 'RST/SKS Contributor',
+      bg: 'var(--secondary-light)',
+      border: '1px solid rgba(27,94,53,0.25)',
+      color: 'var(--secondary)',
+    },
+  }
+
+  const cfg = configs[category]
+  return (
+    <span
+      title={cfg.title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: 20,
+        fontSize: 12,
+        fontWeight: 600,
+        background: cfg.bg,
+        border: cfg.border,
+        color: cfg.color,
+        letterSpacing: '0.02em',
+        flexShrink: 0,
+        cursor: 'help',
+      }}
+    >
+      {cfg.label}
+    </span>
+  )
+}
+
 const EMPTY_FORM = {
   name: '', mobile: '', house: '', society: '',
   city: 'Gurgaon', sector: '', status: 'Active',
-  lostReason: '', notes: '',
+  lostReason: '', notes: '', supportContribution: '',
 }
 
 function SegmentChip({ segId }) {
@@ -68,7 +146,7 @@ function DaysSinceBadge({ lastPickup }) {
   )
 }
 
-// ── FEATURE 2: Prominent Donor ID Badge ──────────────────────────────────────
+// ── Prominent Donor ID Badge ──────────────────────────────────────────────────
 function DonorIdBadge({ id }) {
   return (
     <span style={{
@@ -91,8 +169,24 @@ function DonorIdBadge({ id }) {
   )
 }
 
+// ── Support Contribution chip ─────────────────────────────────────────────────
+function SupportChip({ value }) {
+  if (!value?.trim()) return null
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+      background: 'var(--danger-bg)', color: '#991B1B',
+      border: '1px solid rgba(239,68,68,0.2)',
+    }}>
+      <Heart size={10} fill="#991B1B" />
+      {value}
+    </div>
+  )
+}
+
 export default function Donors({ triggerAddDonor, onAddDonorDone }) {
-  const { donors, addDonor, updateDonor, deleteDonor } = useApp()
+  const { donors, pickups, addDonor, updateDonor, deleteDonor } = useApp()
 
   const [modal, setModal]       = useState(false)
   const [editing, setEditing]   = useState(null)
@@ -105,6 +199,25 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
   const [filterSociety, setFilterSociety] = useState('')
   const [showFilters, setShowFilters]     = useState(false)
   const [activeSeg, setActiveSeg]         = useState('all')
+
+  // ── Pre-compute per-donor pickup maps (perf: avoid re-filtering in render) ─
+  const pickupsByDonor = useMemo(() => {
+    const map = {}
+    pickups.forEach(p => {
+      if (!map[p.donorId]) map[p.donorId] = []
+      map[p.donorId].push(p)
+    })
+    return map
+  }, [pickups])
+
+  // ── Pre-compute per-donor category ───────────────────────────────────────
+  const donorCategories = useMemo(() => {
+    const map = {}
+    donors.forEach(d => {
+      map[d.id] = getDonorCategory(d, pickupsByDonor[d.id] || [])
+    })
+    return map
+  }, [donors, pickupsByDonor])
 
   const sectorOptions = filterCity ? (CITY_SECTORS[filterCity] || []) : []
   const formSectors   = CITY_SECTORS[form.city] || []
@@ -140,7 +253,7 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
 
   const openModal = (donor = null) => {
     setEditing(donor)
-    setForm(donor ? { ...EMPTY_FORM, ...donor } : EMPTY_FORM)
+    setForm(donor ? { ...EMPTY_FORM, ...donor, supportContribution: donor.supportContribution || '' } : EMPTY_FORM)
     setModal(true)
   }
   const closeModal = () => { setModal(false); setEditing(null) }
@@ -218,6 +331,21 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
             </button>
           )
         })}
+      </div>
+
+      {/* ── Category legend ── */}
+      <div style={{
+        display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center',
+        padding: '8px 14px', background: 'var(--bg)', borderRadius: 8,
+        border: '1px solid var(--border-light)', marginBottom: 14, fontSize: 12,
+        color: 'var(--text-muted)',
+      }}>
+        <span style={{ fontWeight: 600, color: 'var(--text-secondary)', marginRight: 4 }}>Donor type:</span>
+        <span title="Has RST/SKS pickups">👍 RST/SKS Contributor</span>
+        <span style={{ color: 'var(--border)' }}>·</span>
+        <span title="Has donated goods/money support">❤️ Supporter</span>
+        <span style={{ color: 'var(--border)' }}>·</span>
+        <span title="Both RST/SKS and support">❤️ 👍 Both</span>
       </div>
 
       {/* ── Search + filter bar ── */}
@@ -312,6 +440,7 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
             const segDef   = SEGMENTS.find(s => s.id === seg)
             const overdue  = d.nextPickup && new Date(d.nextPickup) < new Date() && d.status === 'Active'
             const days     = daysSince(d.lastPickup)
+            const category = donorCategories[d.id]
 
             return (
               <div key={d.id} className="card" style={{ borderLeft: `3px solid ${segDef?.borderColor || 'var(--border-light)'}` }}>
@@ -329,10 +458,11 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
 
                   {/* Info */}
                   <div style={{ flex: '1 1 0', minWidth: 0 }}>
-                    {/* ── FEATURE 2: ID badge prominently before name ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                    {/* ID badge + name + category + segment + days */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 4 }}>
                       <DonorIdBadge id={d.id} />
                       <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{d.name}</div>
+                      <CategoryBadge category={category} />
                       <SegmentChip segId={seg} />
                       <DaysSinceBadge lastPickup={d.lastPickup} />
                     </div>
@@ -343,6 +473,12 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
                       <MapPin size={10} style={{ flexShrink: 0 }} />
                       <span className="truncate">{d.society}{d.sector && `, ${d.sector}`}, {d.city}</span>
                     </div>
+                    {/* Support contribution chip */}
+                    {d.supportContribution?.trim() && (
+                      <div style={{ marginTop: 6 }}>
+                        <SupportChip value={d.supportContribution} />
+                      </div>
+                    )}
                   </div>
 
                   {/* Actions */}
@@ -463,6 +599,32 @@ export default function Donors({ triggerAddDonor, onAddDonorDone }) {
                     </select>
                   </div>
                 )}
+
+                {/* ── Support Contribution field ─────────────────────────────── */}
+                <div className="form-group full">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Heart size={12} color="var(--danger)" />
+                    Support Contribution
+                    <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 2 }}>(optional — goods, money, clothes, books, etc.)</span>
+                  </label>
+                  <input
+                    value={form.supportContribution}
+                    onChange={e => setField('supportContribution', e.target.value)}
+                    placeholder="e.g. Clothes, Books, Money, Stationery…"
+                  />
+                  {form.supportContribution?.trim() && (
+                    <div style={{
+                      marginTop: 6, padding: '6px 12px',
+                      background: 'var(--danger-bg)', borderRadius: 6,
+                      fontSize: 12, color: '#991B1B',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                    }}>
+                      <Heart size={11} fill="#991B1B" />
+                      This donor will be tagged as a <strong>❤️ Supporter</strong>
+                    </div>
+                  )}
+                </div>
+
                 <div className="form-group full">
                   <label>Notes</label>
                   <textarea value={form.notes} onChange={e => setField('notes', e.target.value)} placeholder="Any additional notes…" style={{ minHeight: 72 }} />

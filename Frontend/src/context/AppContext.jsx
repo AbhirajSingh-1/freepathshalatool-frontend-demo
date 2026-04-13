@@ -11,7 +11,7 @@ import {
   kabadiwalas as _initKabs,
 } from '../data/mockData'
 
-import { raddiMasterData as _initRaddi } from '../data/temp';
+import { raddiMasterData as _initRaddi } from '../data/temp'
 
 const AppContext = createContext(null)
 
@@ -42,6 +42,7 @@ function deriveDonorStatus(lastPickup) {
   return 'Churned'
 }
 
+// ── Readable ID generators ────────────────────────────────────────────────────
 function nextDonorId(existing) {
   return `D-${String(existing.length + 1).padStart(3, '0')}`
 }
@@ -90,6 +91,7 @@ export function AppProvider({ children }) {
   const [kabadiwalas,  setKabs]    = useState(() => _initKabs)
   const [raddiRecords, setRaddi]   = useState(() => _initRaddi)
 
+  // Initialise order sequence counter based on existing pickups
   useEffect(() => {
     initOrderSeq(_initPickups.length + _initRaddi.length + 10)
   }, [])
@@ -102,12 +104,13 @@ export function AppProvider({ children }) {
       const id = nextDonorId(prev)
       newDonor = {
         ...data, id,
-        status:    data.status || 'Active',
-        totalRST:  0,
-        totalSKS:  0,
-        createdAt: today(),
-        lastPickup: null,
-        nextPickup: null,
+        status:             data.status || 'Active',
+        totalRST:           0,
+        totalSKS:           0,
+        supportContribution: data.supportContribution || '',
+        createdAt:          today(),
+        lastPickup:         null,
+        nextPickup:         null,
       }
       return [newDonor, ...prev]
     })
@@ -234,15 +237,40 @@ export function AppProvider({ children }) {
     })
   }, [])
 
+  // ── updatePickup: syncs pickups, raddiRecords AND kabadiwalas payment stats ──
   const updatePickup = useCallback(async (id, data) => {
     await delay()
     const paymentStatus =
       (data.totalValue !== undefined || data.amountPaid !== undefined)
         ? derivePaymentStatus(data.totalValue, data.amountPaid)
         : undefined
-    setPickups(prev =>
-      prev.map(p => p.id === id ? { ...p, ...data, ...(paymentStatus ? { paymentStatus } : {}) } : p)
-    )
+
+    // Capture current pickup before updating (for kabadiwala delta calc)
+    setPickups(prevPickups => {
+      const oldPickup = prevPickups.find(p => p.id === id)
+
+      // Sync kabadiwala amountReceived / pendingAmount if payment changed
+      if (data.amountPaid !== undefined && oldPickup?.kabadiwala) {
+        const oldPaid = Number(oldPickup.amountPaid) || 0
+        const newPaid = Number(data.amountPaid) || 0
+        const delta   = newPaid - oldPaid
+        if (delta !== 0) {
+          setKabs(prevK => prevK.map(k => {
+            if (k.name !== oldPickup.kabadiwala) return k
+            return {
+              ...k,
+              amountReceived: (k.amountReceived || 0) + delta,
+              pendingAmount:  Math.max(0, (k.pendingAmount || 0) - delta),
+            }
+          }))
+        }
+      }
+
+      return prevPickups.map(p =>
+        p.id === id ? { ...p, ...data, ...(paymentStatus ? { paymentStatus } : {}) } : p
+      )
+    })
+
     if (paymentStatus) {
       const raddiPS = paymentStatus === 'Paid' ? 'Received' : 'Yet to Receive'
       setRaddi(prev => prev.map(r =>
@@ -259,40 +287,28 @@ export function AppProvider({ children }) {
     setRaddi(prev => prev.filter(r => r.pickupId !== id && r.orderId !== id))
   }, [])
 
-  // ── PICKUP PARTNERS (formerly Kabadiwala) CRUD ────────────────────────────
+  // ── KABADIWALA CRUD ───────────────────────────────────────────────────────
   const addKabadiwala = useCallback(async (data) => {
     await delay()
     let newK
     setKabs(prev => {
       const id = nextKabId(prev)
-      newK = {
-        ...data, id, rating: 4.0,
-        totalPickups: 0, totalValue: 0,
-        amountReceived: 0, pendingAmount: 0,
-        transactions: [],
-        sectors:  data.sectors  || [],
-        societies: data.societies || [],
-        email:    data.email    || '',
-      }
+      newK = { ...data, id, rating: 4.0, totalPickups: 0, totalValue: 0, amountReceived: 0, pendingAmount: 0, transactions: [] }
       return [...prev, newK]
     })
     await delay(50)
     return newK
   }, [])
 
-  // Alias for "Pickup Partners" naming
-  const addPartner       = addKabadiwala
-  const updatePartner    = useCallback(async (id, data) => {
+  const updateKabadiwala = useCallback(async (id, data) => {
     await delay()
     setKabs(prev => prev.map(k => k.id === id ? { ...k, ...data } : k))
   }, [])
-  const deletePartner    = useCallback(async (id) => {
+
+  const deleteKabadiwala = useCallback(async (id) => {
     await delay()
     setKabs(prev => prev.filter(k => k.id !== id))
   }, [])
-
-  const updateKabadiwala = updatePartner
-  const deleteKabadiwala = deletePartner
 
   const recordKabadiwalaPayment = useCallback(async (kabId, { pickupId, amount, refMode, refValue, notes, date }) => {
     await delay()
@@ -385,22 +401,16 @@ export function AppProvider({ children }) {
   }, [donors, pickups, raddiRecords, kabadiwalas])
 
   const value = useMemo(() => ({
-    donors, pickups,
-    // Both names for compatibility
-    kabadiwalas, partners: kabadiwalas,
-    raddiRecords,
+    donors, pickups, kabadiwalas, raddiRecords,
     dashboardStats, schedulerTabData,
     addDonor, updateDonor, deleteDonor,
     createPickup, schedulePickup, recordPickup, updatePickup, deletePickup,
-    // Both names for pickup partners
     addKabadiwala, updateKabadiwala, deleteKabadiwala, recordKabadiwalaPayment,
-    addPartner,    updatePartner,    deletePartner,
   }), [
     donors, pickups, kabadiwalas, raddiRecords, dashboardStats, schedulerTabData,
     addDonor, updateDonor, deleteDonor,
     createPickup, schedulePickup, recordPickup, updatePickup, deletePickup,
     addKabadiwala, updateKabadiwala, deleteKabadiwala, recordKabadiwalaPayment,
-    addPartner, updatePartner, deletePartner,
   ])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>

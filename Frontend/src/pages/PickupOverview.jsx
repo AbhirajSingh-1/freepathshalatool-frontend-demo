@@ -1,5 +1,6 @@
 // Frontend/src/pages/PickupOverview.jsx
 // Admin/Manager: Overview of all pickups — Individual & Drive stats + scheduler tabs
+// FIXED: "This Week" = Monday to Sunday of current week (includes future dates in week)
 import { useState, useMemo } from 'react'
 import {
   Truck, Users, AlertTriangle, TrendingUp,
@@ -10,7 +11,7 @@ import { useRole }  from '../context/RoleContext'
 import PickupTabs   from '../components/PickupTabs'
 import { fmtDate, fmtCurrency } from '../utils/helpers'
 
-// ── Period helpers (shared with Dashboard) ─────────────────────────────────────
+// ── Period helpers ─────────────────────────────────────────────────────────────
 const padM = (n) => String(n).padStart(2, '0')
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
@@ -37,12 +38,27 @@ function getFYRange(fyStart) {
 }
 
 const fmt = (d) => d.toISOString().slice(0, 10)
+
+// ── FIXED: This Week = Monday–Sunday of current week ──────────────────────────
+function getThisWeekRange() {
+  const now = new Date()
+  const day = now.getDay() // 0 = Sun, 1 = Mon, ...6 = Sat
+  // Days since Monday (treat Sunday as day 7)
+  const daysSinceMon = day === 0 ? 6 : day - 1
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - daysSinceMon)
+  const sunday = new Date(monday)
+  sunday.setDate(monday.getDate() + 6)
+  return { from: fmt(monday), to: fmt(sunday) }
+}
+
 function getPresetRange(p) {
   const n = new Date()
   if (p === 'today')     return { from: fmt(n), to: fmt(n) }
-  if (p === 'yesterday') { const d = new Date(n); d.setDate(d.getDate() - 1); return { from: fmt(d), to: fmt(d) } }
-  if (p === 'tomorrow')  { const d = new Date(n); d.setDate(d.getDate() + 1); return { from: fmt(d), to: fmt(d) } }
-  if (p === 'week')      { const d = new Date(n); d.setDate(d.getDate() - 7); return { from: fmt(d), to: fmt(n) } }
+  if (p === 'yesterday') { const d = new Date(n); d.setDate(n.getDate() - 1); return { from: fmt(d), to: fmt(d) } }
+  if (p === 'tomorrow')  { const d = new Date(n); d.setDate(n.getDate() + 1); return { from: fmt(d), to: fmt(d) } }
+  if (p === 'week')      return getThisWeekRange()   // FIXED: Mon–Sun including future
+  if (p === 'next7')     { const d = new Date(n); d.setDate(n.getDate() + 7); return { from: fmt(n), to: fmt(d) } }
   return { from: '', to: '' }
 }
 
@@ -72,42 +88,28 @@ function PeriodBar({ dateFrom, dateTo, onRange, last5 }) {
         const r = getMonthRange(ym)
         const active = dateFrom === r.from && dateTo === r.to
         return (
-          <button
-            key={ym}
-            className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: 11.5 }}
-            onClick={() => onRange(r.from, r.to)}
-          >
+          <button key={ym} className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ fontSize: 11.5 }} onClick={() => onRange(r.from, r.to)}>
             {MONTHS_SHORT[+m - 1]} {y}
           </button>
         )
       })}
 
-      {/* FY dropdown */}
       <div style={{ position: 'relative' }}>
-        <button
-          className="btn btn-ghost btn-sm"
-          style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5 }}
-          onClick={() => setFyOpen(o => !o)}
-        >
+        <button className="btn btn-ghost btn-sm" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5 }}
+          onClick={() => setFyOpen(o => !o)}>
           Financial Year {fyOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
         </button>
         {fyOpen && (
-          <div style={{
-            position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 40,
-            background: 'var(--surface)', border: '1px solid var(--border)',
-            borderRadius: 8, boxShadow: 'var(--shadow-md)', padding: 6, minWidth: 140,
-          }}>
+          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 40, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-md)', padding: 6, minWidth: 140 }}>
             {fyOptions.map(fy => {
               const r = getFYRange(fy)
               const active = dateFrom === r.from && dateTo === r.to
               return (
-                <button
-                  key={fy}
+                <button key={fy}
                   className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`}
                   style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 3, fontSize: 11.5 }}
-                  onClick={() => { onRange(r.from, r.to); setFyOpen(false) }}
-                >
+                  onClick={() => { onRange(r.from, r.to); setFyOpen(false) }}>
                   FY {fy}-{fy + 1}
                 </button>
               )
@@ -116,20 +118,11 @@ function PeriodBar({ dateFrom, dateTo, onRange, last5 }) {
         )}
       </div>
 
-      <button
-        className={`btn btn-sm ${!dateFrom && !dateTo ? 'btn-primary' : 'btn-ghost'}`}
-        style={{ fontSize: 11.5 }}
-        onClick={() => onRange('', '')}
-      >
-        All Time
-      </button>
+      <button className={`btn btn-sm ${!dateFrom && !dateTo ? 'btn-primary' : 'btn-ghost'}`}
+        style={{ fontSize: 11.5 }} onClick={() => onRange('', '')}>All Time</button>
 
       {(dateFrom || dateTo) && (
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => onRange('', '')}
-          style={{ color: 'var(--danger)', fontSize: 11.5 }}
-        >
+        <button className="btn btn-ghost btn-sm" onClick={() => onRange('', '')} style={{ color: 'var(--danger)', fontSize: 11.5 }}>
           <X size={11} /> Clear
         </button>
       )}
@@ -139,10 +132,9 @@ function PeriodBar({ dateFrom, dateTo, onRange, last5 }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PickupOverview() {
-  const { pickups, donors, schedulerTabData } = useApp()
+  const { pickups, schedulerTabData } = useApp()
   const { can } = useRole()
 
-  // Default: last 5 months span
   const last5 = getLast5Months()
   const defaultFrom = last5[0] + '-01'
   const defaultTo   = new Date().toISOString().slice(0, 10)
@@ -153,6 +145,7 @@ export default function PickupOverview() {
   const [dateTo,     setDateTo]    = useState(defaultTo)
   const [sector,     setSector]    = useState('')
   const [showFilters, setShowFilters] = useState(false)
+
   // Scheduler sub-filters
   const [schPreset, setSchPreset] = useState('all')
   const [schFrom,   setSchFrom]   = useState('')
@@ -160,13 +153,16 @@ export default function PickupOverview() {
 
   const applySchPreset = (p) => {
     setSchPreset(p)
-    if (p !== 'custom' && p !== 'all') { const r = getPresetRange(p); setSchFrom(r.from); setSchTo(r.to) }
-    else if (p === 'all') { setSchFrom(''); setSchTo('') }
+    if (p === 'all') { setSchFrom(''); setSchTo('') }
+    else if (p !== 'custom') {
+      const r = getPresetRange(p)
+      setSchFrom(r.from)
+      setSchTo(r.to)
+    }
   }
 
   const allSectors = useMemo(() => [...new Set(pickups.map(p => p.sector).filter(Boolean))].sort(), [pickups])
 
-  // Filter pickups by period
   const filteredPickups = useMemo(() =>
     pickups.filter(p => {
       const d = p.date || ''
@@ -186,7 +182,6 @@ export default function PickupOverview() {
   const pendingInd         = individualPickups.filter(p => p.status === 'Pending').length
   const pendingDrive       = drivePickups.filter(p => p.status === 'Pending').length
 
-  // Monthly breakdown (period-aware)
   const monthlyStats = useMemo(() => {
     const m = {}
     filteredPickups.filter(p => p.status === 'Completed').forEach(p => {
@@ -200,7 +195,7 @@ export default function PickupOverview() {
     return Object.values(m).sort((a, b) => b.month.localeCompare(a.month)).slice(0, 8)
   }, [filteredPickups])
 
-  // Scheduler tab data filtered
+  // Scheduler tab data filtered — THIS WEEK fix applied via getPresetRange
   const filteredTabData = useMemo(() => {
     const inRange  = (ds) => { if (!ds) return true; if (schFrom && ds < schFrom) return false; if (schTo && ds > schTo) return false; return true }
     const inSec    = (row) => !sector || row.sector === sector
@@ -254,18 +249,23 @@ export default function PickupOverview() {
                 <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Period:</span>
                 <span style={{ fontSize: 12.5, color: 'var(--primary)', fontWeight: 600 }}>{periodLabel}</span>
               </div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Date range manual inputs */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: 10.5, fontWeight: 600 }}>From</label>
+                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width: 140 }} />
+                </div>
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label style={{ fontSize: 10.5, fontWeight: 600 }}>To</label>
+                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ width: 140 }} />
+                </div>
                 <select value={sector} onChange={e => setSector(e.target.value)} style={{ fontSize: 12, minWidth: 140 }}>
                   <option value="">All Sectors</option>
                   {allSectors.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
             </div>
-            <PeriodBar
-              dateFrom={dateFrom} dateTo={dateTo}
-              onRange={(f, t) => { setDateFrom(f); setDateTo(t) }}
-              last5={last5}
-            />
+            <PeriodBar dateFrom={dateFrom} dateTo={dateTo} onRange={(f, t) => { setDateFrom(f); setDateTo(t) }} last5={last5} />
           </div>
 
           {/* KPIs */}
@@ -372,13 +372,23 @@ export default function PickupOverview() {
             </button>
           </div>
 
+          {/* Filters OUTSIDE tabs (moved per spec) */}
           {showFilters && (
             <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--border-light)', background: 'var(--bg)', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Date</label>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {[['today','Today'],['yesterday','Yesterday'],['tomorrow','Tomorrow'],['week','This Week'],['all','All'],['custom','Custom']].map(([v, l]) => (
-                    <button key={v} className={`btn btn-sm ${schPreset === v ? 'btn-primary' : 'btn-ghost'}`} onClick={() => applySchPreset(v)} style={{ fontSize: 12 }}>{l}</button>
+                  {[
+                    ['today',     'Today'],
+                    ['yesterday', 'Yesterday'],
+                    ['tomorrow',  'Tomorrow'],
+                    ['week',      'This Week (Mon–Sun)'],  // FIXED label
+                    ['next7',     'Next 7 Days'],
+                    ['all',       'All'],
+                    ['custom',    'Custom'],
+                  ].map(([v, l]) => (
+                    <button key={v} className={`btn btn-sm ${schPreset === v ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => applySchPreset(v)} style={{ fontSize: 12 }}>{l}</button>
                   ))}
                   {schPreset === 'custom' && (
                     <>
@@ -388,6 +398,12 @@ export default function PickupOverview() {
                     </>
                   )}
                 </div>
+                {/* Show current week range when "This Week" is selected */}
+                {schPreset === 'week' && schFrom && (
+                  <div style={{ fontSize: 11, color: 'var(--info)', fontWeight: 600 }}>
+                    📅 {fmtDate(schFrom)} – {fmtDate(schTo)}
+                  </div>
+                )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Sector</label>
