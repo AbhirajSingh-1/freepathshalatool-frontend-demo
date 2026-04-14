@@ -124,7 +124,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
         onSocieties(safeSocieties.filter(soc => !removedSocs.includes(soc)))
       }
     } else {
-      if (safeSectors.length >= 2) return
+      if (safeSectors.length >= 3) return
       onSectors([...safeSectors, s])
     }
   }
@@ -158,7 +158,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
             style={{ padding:'8px 12px', border:`1.5px solid ${openSec ? 'var(--secondary)' : 'var(--border)'}`, borderRadius:'var(--radius-sm)', cursor:'pointer', background:'var(--surface)', minHeight:42, display:'flex', alignItems:'center', flexWrap:'wrap', gap:6, boxShadow: openSec ? '0 0 0 3px rgba(27,94,53,0.12)' : 'none' }}
           >
             {safeSectors.length === 0 ? (
-              <span style={{ color:'var(--text-muted)', fontSize:13 }}>Select up to 2 sectors from {city || 'Gurgaon'}…</span>
+              <span style={{ color:'var(--text-muted)', fontSize:13 }}>Select up to 3 sectors from {city || 'Gurgaon'}…</span>
             ) : safeSectors.map(s => (
               <span key={s} style={{ background:'var(--secondary-light)', color:'var(--secondary)', borderRadius:20, padding:'2px 10px', fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:5 }}>
                 {s}
@@ -177,7 +177,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
                   <div style={{ padding:'12px', textAlign:'center', fontSize:12.5, color:'var(--text-muted)' }}>No sectors match</div>
                 ) : filteredSectors.map(s => {
                   const selected = safeSectors.includes(s)
-                  const disabled = !selected && safeSectors.length >= 2
+                  const disabled = !selected && safeSectors.length >= 3
                   return (
                     <button key={s} type="button" onClick={() => { if (!disabled) { toggleSector(s) } }} style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:6, border:'none', background: selected ? 'var(--secondary-light)' : 'transparent', color: selected ? 'var(--secondary)' : disabled ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: selected ? 700 : 400, fontSize:12.5, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
                       {s}{selected && ' ✓'}
