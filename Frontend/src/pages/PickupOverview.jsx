@@ -362,7 +362,6 @@ export default function PickupOverview() {
                     ['yesterday', 'Yesterday'],
                     ['tomorrow',  'Tomorrow'],
                     ['week',      'This Week (Mon–Sun)'],  // FIXED label
-                    ['next7',     'Next 7 Days'],
                     ['all',       'All'],
                     ['custom',    'Custom'],
                   ].map(([v, l]) => (

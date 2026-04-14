@@ -139,21 +139,6 @@ export default function PickupScheduler({ onNav }) {
 
   return (
     <div className="page-body">
-      {/* KPIs */}
-      <div className="stat-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 24 }}>
-        {[
-          { label: 'Scheduled', val: dashboardStats.upcomingPickups, color: 'blue' },
-          { label: 'Overdue',   val: dashboardStats.overduePickups,  color: 'red' },
-          { label: 'Active Donors', val: dashboardStats.activeDonors, color: 'green' },
-          { label: 'Total Pickups', val: dashboardStats.totalPickupsCompleted, color: 'orange' },
-        ].map(s => (
-          <div key={s.label} className={`stat-card ${s.color}`}>
-            <div className="stat-value">{s.val}</div>
-            <div className="stat-label">{s.label}</div>
-          </div>
-        ))}
-      </div>
-
       <div className="two-col" style={{ alignItems: 'start', marginBottom: 28 }}>
         {/* Schedule Form */}
         <div className="card">
