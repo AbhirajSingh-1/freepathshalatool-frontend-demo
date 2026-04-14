@@ -109,7 +109,7 @@ function PartnerSearch({ partners, donorSector, value, onChange }) {
     if (!donorSector) return { recommended: [], others: safePartners }
     const rec = safePartners.filter(p => {
       const secs = Array.isArray(p.sectors) ? p.sectors : []
-      return secs.some(s => s === donorSector || donorSector.includes(s) || s.includes(donorSector))
+      return secs.some(s => s === donorSector)
     })
     const recNames = new Set(rec.map(p => p.name))
     return { recommended: rec, others: safePartners.filter(p => !recNames.has(p.name)) }
