@@ -42,7 +42,6 @@ function deriveDonorStatus(lastPickup) {
   return 'Churned'
 }
 
-// ── Readable ID generators ────────────────────────────────────────────────────
 function nextDonorId(existing) {
   return `D-${String(existing.length + 1).padStart(3, '0')}`
 }
@@ -91,7 +90,6 @@ export function AppProvider({ children }) {
   const [kabadiwalas,  setKabs]    = useState(() => _initKabs)
   const [raddiRecords, setRaddi]   = useState(() => _initRaddi)
 
-  // Initialise order sequence counter based on existing pickups
   useEffect(() => {
     initOrderSeq(_initPickups.length + _initRaddi.length + 10)
   }, [])
@@ -108,6 +106,7 @@ export function AppProvider({ children }) {
         totalRST:           0,
         totalSKS:           0,
         supportContribution: data.supportContribution || '',
+        donorType:          data.donorType || 'donor',
         createdAt:          today(),
         lastPickup:         null,
         nextPickup:         null,
@@ -218,7 +217,8 @@ export function AppProvider({ children }) {
             pendingAmount:  (k.pendingAmount  || 0) + (val - paid),
             transactions: [...(k.transactions || []), {
               date: data.date || today(), pickupId: id,
-              donor: data.donorName || '', value: val, paid, status: paymentStatus,
+              donor: data.donorName || '', society: data.society || '',
+              value: val, paid, status: paymentStatus,
             }],
           }
         })
@@ -237,7 +237,6 @@ export function AppProvider({ children }) {
     })
   }, [])
 
-  // ── updatePickup: syncs pickups, raddiRecords AND kabadiwalas payment stats ──
   const updatePickup = useCallback(async (id, data) => {
     await delay()
     const paymentStatus =
@@ -245,11 +244,9 @@ export function AppProvider({ children }) {
         ? derivePaymentStatus(data.totalValue, data.amountPaid)
         : undefined
 
-    // Capture current pickup before updating (for kabadiwala delta calc)
     setPickups(prevPickups => {
       const oldPickup = prevPickups.find(p => p.id === id)
 
-      // Sync kabadiwala amountReceived / pendingAmount if payment changed
       if (data.amountPaid !== undefined && oldPickup?.kabadiwala) {
         const oldPaid = Number(oldPickup.amountPaid) || 0
         const newPaid = Number(data.amountPaid) || 0
@@ -402,10 +399,14 @@ export function AppProvider({ children }) {
 
   const value = useMemo(() => ({
     donors, pickups, kabadiwalas, raddiRecords,
+    partners: kabadiwalas,           // alias used by Pickups.jsx, Pickuppartners.jsx
     dashboardStats, schedulerTabData,
     addDonor, updateDonor, deleteDonor,
     createPickup, schedulePickup, recordPickup, updatePickup, deletePickup,
     addKabadiwala, updateKabadiwala, deleteKabadiwala, recordKabadiwalaPayment,
+    addPartner:    addKabadiwala,    // aliases used by Pickuppartners.jsx
+    updatePartner: updateKabadiwala,
+    deletePartner: deleteKabadiwala,
   }), [
     donors, pickups, kabadiwalas, raddiRecords, dashboardStats, schedulerTabData,
     addDonor, updateDonor, deleteDonor,

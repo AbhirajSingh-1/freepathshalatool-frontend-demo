@@ -1,10 +1,9 @@
 // Frontend/src/pages/Dashboard.jsx
-// Simplified: Core KPIs + Month filter + charts (no overdue donors list, no scheduled pickups section)
 import { useState, useMemo } from 'react'
 import {
   Users, Truck, IndianRupee, TrendingUp,
   Weight, Car, CalendarDays, ChevronDown, ChevronUp,
-  UserCheck, PackageCheck, Download,
+  UserCheck, PackageCheck,
 } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -12,32 +11,44 @@ import {
 } from 'recharts'
 import { useApp }  from '../context/AppContext'
 import { itemBreakdown } from '../data/mockData'
-import { fmtCurrency, exportToExcel } from '../utils/helpers'
+import { fmtCurrency } from '../utils/helpers'
 
 const PIE_COLORS = ['#E8521A', '#1B5E35', '#F5B942', '#3B82F6', '#8B5CF6', '#EC4899']
-const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 const padM = (n) => String(n).padStart(2, '0')
 
-function getLast5Months() {
+// ── Period range helpers ──────────────────────────────────────────────────────
+function getPeriodRange(type, customFrom, customTo) {
   const now = new Date()
-  return Array.from({ length: 5 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (4 - i), 1)
-    return `${d.getFullYear()}-${padM(d.getMonth() + 1)}`
-  })
-}
+  const y   = now.getFullYear()
+  const m   = now.getMonth() // 0-indexed
 
-function getMonthRange(ym) {
-  const [y, m] = ym.split('-').map(Number)
-  const last = new Date(y, m, 0).getDate()
-  return { from: `${ym}-01`, to: `${ym}-${padM(last)}` }
-}
-
-function getFinancialYear(date = new Date()) {
-  return date.getMonth() + 1 >= 4 ? date.getFullYear() : date.getFullYear() - 1
-}
-
-function getFYRange(fyStart) {
-  return { from: `${fyStart}-04-01`, to: `${fyStart + 1}-03-31` }
+  if (type === 'current_month') {
+    const last = new Date(y, m + 1, 0).getDate()
+    return { from: `${y}-${padM(m + 1)}-01`, to: `${y}-${padM(m + 1)}-${padM(last)}` }
+  }
+  if (type === 'last_month') {
+    const lm  = m === 0 ? 11 : m - 1
+    const ly  = m === 0 ? y - 1 : y
+    const last = new Date(ly, lm + 1, 0).getDate()
+    return { from: `${ly}-${padM(lm + 1)}-01`, to: `${ly}-${padM(lm + 1)}-${padM(last)}` }
+  }
+  if (type === 'last_quarter') {
+    // current quarter start month (0-indexed)
+    const curQStart = Math.floor(m / 3) * 3
+    let lqStart = curQStart - 3
+    let lqYear  = y
+    if (lqStart < 0) { lqStart += 12; lqYear = y - 1 }
+    const lqEnd  = lqStart + 2
+    const lqLast = new Date(lqYear, lqEnd + 1, 0).getDate()
+    return {
+      from: `${lqYear}-${padM(lqStart + 1)}-01`,
+      to:   `${lqYear}-${padM(lqEnd + 1)}-${padM(lqLast)}`,
+    }
+  }
+  if (type === 'custom') {
+    return { from: customFrom || '', to: customTo || '' }
+  }
+  return { from: '', to: '' }
 }
 
 function buildMonthlyChart(pickups, from, to) {
@@ -45,7 +56,7 @@ function buildMonthlyChart(pickups, from, to) {
   pickups
     .filter(p => p.status === 'Completed' && p.date >= (from || '') && p.date <= (to || '9999'))
     .forEach(p => {
-      const key = (p.date || '').slice(0, 7)
+      const key   = (p.date || '').slice(0, 7)
       if (!key) return
       const label = new Date(key + '-01').toLocaleString('default', { month: 'short' })
       map[key] = map[key] || { month: label, value: 0, pickups: 0 }
@@ -58,55 +69,38 @@ function buildMonthlyChart(pickups, from, to) {
     .slice(-6)
 }
 
-// ── Period pill selector ──────────────────────────────────────────────────────
-function PeriodPills({ period, onPeriod }) {
-  const [fyOpen, setFyOpen] = useState(false)
-  const last5   = getLast5Months()
-  const fy      = getFinancialYear()
-
-  const label = period.type === 'all' ? 'All Time'
-    : period.type === 'month' ? (() => { const [y, m] = period.value.split('-'); return `${MONTHS_SHORT[+m - 1]} ${y}` })()
-    : period.type === 'fy' ? `FY ${period.value}-${period.value + 1}`
-    : 'Custom'
-
+// ── Period Picker ─────────────────────────────────────────────────────────────
+function PeriodPicker({ period, onPeriod, customFrom, customTo, onCustomFrom, onCustomTo }) {
+  const OPTIONS = [
+    { id: 'current_month', label: 'Current Month' },
+    { id: 'last_month',    label: 'Last Month' },
+    { id: 'last_quarter',  label: 'Last Quarter' },
+    { id: 'custom',        label: 'Custom' },
+  ]
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-      {last5.map(ym => {
-        const [y, m] = ym.split('-')
-        const active = period.type === 'month' && period.value === ym
-        return (
-          <button key={ym} className={`btn btn-sm ${active ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: 11.5 }}
-            onClick={() => onPeriod({ type: 'month', value: ym })}>
-            {MONTHS_SHORT[+m - 1]} {y}
-          </button>
-        )
-      })}
-
-      <div style={{ position: 'relative' }}>
-        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}
-          onClick={() => setFyOpen(o => !o)}>
-          Financial Year {fyOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+      {OPTIONS.map(o => (
+        <button
+          key={o.id}
+          className={`btn btn-sm ${period === o.id ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ fontSize: 12 }}
+          onClick={() => onPeriod(o.id)}
+        >
+          {o.label}
         </button>
-        {fyOpen && (
-          <div style={{ position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 40, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: 'var(--shadow-md)', padding: 6, minWidth: 140 }}>
-            {[fy, fy - 1, fy - 2].map(f => (
-              <button key={f}
-                className={`btn btn-sm ${period.type === 'fy' && period.value === f ? 'btn-primary' : 'btn-ghost'}`}
-                style={{ width: '100%', justifyContent: 'flex-start', marginBottom: 3, fontSize: 11.5 }}
-                onClick={() => { onPeriod({ type: 'fy', value: f }); setFyOpen(false) }}>
-                FY {f}-{f + 1}
-              </button>
-            ))}
+      ))}
+      {period === 'custom' && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label style={{ fontSize: 10.5, fontWeight: 600 }}>From</label>
+            <input type="date" value={customFrom} onChange={e => onCustomFrom(e.target.value)} style={{ width: 140 }} />
           </div>
-        )}
-      </div>
-
-      <button className={`btn btn-sm ${period.type === 'all' ? 'btn-primary' : 'btn-ghost'}`}
-        style={{ fontSize: 11.5 }}
-        onClick={() => onPeriod({ type: 'all' })}>
-        All Time
-      </button>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label style={{ fontSize: 10.5, fontWeight: 600 }}>To</label>
+            <input type="date" value={customTo} onChange={e => onCustomTo(e.target.value)} style={{ width: 140 }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -115,18 +109,17 @@ function PeriodPills({ period, onPeriod }) {
 export default function Dashboard({ onNav }) {
   const { donors, pickups, raddiRecords, dashboardStats, partners } = useApp()
 
-  const last5 = getLast5Months()
-  const [period, setPeriod] = useState({ type: 'month', value: last5[last5.length - 1] })
+  const [period,     setPeriod]     = useState('current_month')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo,   setCustomTo]   = useState('')
 
-  const { from: pFrom, to: pTo } = useMemo(() => {
-    if (period.type === 'all')   return { from: '', to: '' }
-    if (period.type === 'month') return getMonthRange(period.value)
-    if (period.type === 'fy')    return getFYRange(period.value)
-    return { from: '', to: '' }
-  }, [period])
+  const { from: pFrom, to: pTo } = useMemo(
+    () => getPeriodRange(period, customFrom, customTo),
+    [period, customFrom, customTo]
+  )
 
-  const filteredPickups = useMemo(() =>
-    pickups.filter(p => {
+  const filteredPickups = useMemo(
+    () => pickups.filter(p => {
       const d = p.date || ''
       return (!pFrom || d >= pFrom) && (!pTo || d <= pTo)
     }),
@@ -144,17 +137,21 @@ export default function Dashboard({ onNav }) {
     return { completed: completed.length, totalValue, driveCount, indivCount, totalKg }
   }, [filteredPickups, raddiRecords, pFrom, pTo])
 
-  const monthlyChartData = useMemo(() =>
-    buildMonthlyChart(pickups, pFrom || last5[0] + '-01', pTo),
-    [pickups, pFrom, pTo] // eslint-disable-line
+  const monthlyChartData = useMemo(
+    () => buildMonthlyChart(pickups, pFrom, pTo),
+    [pickups, pFrom, pTo]
   )
 
   const periodLabel = useMemo(() => {
-    if (period.type === 'all')   return 'All Time'
-    if (period.type === 'month') { const [y, m] = period.value.split('-'); return `${MONTHS_SHORT[+m - 1]} ${y}` }
-    if (period.type === 'fy')    return `FY ${period.value}-${period.value + 1}`
-    return ''
-  }, [period])
+    if (period === 'current_month') return 'Current Month'
+    if (period === 'last_month')    return 'Last Month'
+    if (period === 'last_quarter')  return 'Last Quarter'
+    if (period === 'custom' && pFrom && pTo) {
+      const fmt = d => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+      return `${fmt(pFrom)} – ${fmt(pTo)}`
+    }
+    return 'Custom'
+  }, [period, pFrom, pTo])
 
   const activePartners = (partners || []).filter(k => (k.totalPickups || 0) > 0).length
 
@@ -173,7 +170,14 @@ export default function Dashboard({ onNav }) {
           <CalendarDays size={15} color="var(--primary)" />
           <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--primary)' }}>{periodLabel}</span>
         </div>
-        <PeriodPills period={period} onPeriod={setPeriod} />
+        <PeriodPicker
+          period={period}
+          onPeriod={setPeriod}
+          customFrom={customFrom}
+          customTo={customTo}
+          onCustomFrom={setCustomFrom}
+          onCustomTo={setCustomTo}
+        />
       </div>
 
       {/* Core KPIs */}
@@ -283,7 +287,7 @@ export default function Dashboard({ onNav }) {
             </div>
           </div>
         </div>
-      </div>x
+      </div>
 
       {/* Quick nav cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>

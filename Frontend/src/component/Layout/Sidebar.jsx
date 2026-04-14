@@ -16,6 +16,8 @@ const buildNav = (role) => {
       { section: 'Field Operations' },
       { id: 'pickups',        label: 'Record Pickup',    icon: Truck },
       { id: 'pickuppartners', label: 'Pickup Partners',  icon: UserCheck },
+      { section: 'Warehouse' },
+      { id: 'sksoverview',    label: 'SKS Overview',     icon: Shirt },
     ]
   }
 
@@ -100,7 +102,7 @@ export default function Sidebar({ active, onNav, open, onClose, overdueCount, on
           <div className="sidebar-footer-info">
             <div style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', fontSize: 11 }}>FreePathshala NGO</div>
             <div>12A &amp; 80G Certified</div>
-            <div style={{ marginTop: 2 }}>v2.2.0</div>
+            <div style={{ marginTop: 2 }}>v2.3.0</div>
           </div>
         </div>
       </aside>

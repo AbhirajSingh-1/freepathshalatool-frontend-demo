@@ -103,15 +103,9 @@ function AccessDenied({ onBack }) {
 function AppShell() {
   const { can, role, ROLE_PAGES, DEFAULT_PAGE } = useRole()
 
-  const ROLE_PAGES_EXTENDED = {
-    admin:     [...(ROLE_PAGES.admin || []), 'sksoverview'],
-    manager:   [...(ROLE_PAGES.manager || []), 'sksoverview'],
-    executive: ROLE_PAGES.executive || [],
-  }
-
   const getValidPage = (hash) => {
     const page = PAGES[hash] ? hash : DEFAULT_PAGE[role] || 'pickups'
-    return ROLE_PAGES_EXTENDED[role]?.includes(page) ? page : (DEFAULT_PAGE[role] || 'pickups')
+    return (ROLE_PAGES[role] || []).includes(page) ? page : (DEFAULT_PAGE[role] || 'pickups')
   }
 
   const [page, setPage]      = useState(() => getValidPage(window.location.hash.replace('#', '')))
@@ -119,7 +113,7 @@ function AppShell() {
   const [addDonor, setAddD]  = useState(false)
 
   useEffect(() => {
-    if (!ROLE_PAGES_EXTENDED[role]?.includes(page)) {
+    if (!(ROLE_PAGES[role] || []).includes(page)) {
       const fallback = DEFAULT_PAGE[role] || 'pickups'
       setPage(fallback)
       window.location.hash = fallback
@@ -127,7 +121,7 @@ function AppShell() {
   }, [role]) // eslint-disable-line
 
   const navigate = (p) => {
-    if (!ROLE_PAGES_EXTENDED[role]?.includes(p)) return
+    if (!(ROLE_PAGES[role] || []).includes(p)) return
     setPage(p)
     window.location.hash = p
     setSO(false)
@@ -145,7 +139,7 @@ function AppShell() {
   }, [role]) // eslint-disable-line
 
   const PageComponent  = PAGES[page] || Dashboard
-  const isAccessible   = ROLE_PAGES_EXTENDED[role]?.includes(page)
+  const isAccessible   = (ROLE_PAGES[role] || []).includes(page)
 
   return (
     <div className="app-layout">
@@ -186,4 +180,4 @@ export default function App() {
       </RoleProvider>
     </AppProvider>
   )
-}
+}                           

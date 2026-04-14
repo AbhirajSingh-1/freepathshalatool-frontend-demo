@@ -11,7 +11,7 @@ export const ROLES = {
 export const ROLE_PAGES = {
   admin:     ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'raddimaster', 'sksoverview'],
   manager:   ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'sksoverview'],
-  executive: ['pickups', 'pickuppartners'],
+  executive: ['pickups', 'pickuppartners', 'sksoverview'],
 }
 
 export const DEFAULT_PAGE = {
@@ -47,7 +47,7 @@ export function RoleProvider({ children }) {
     viewFinancials:     role === 'admin' || role === 'manager',
     viewPickupOverview: role === 'admin' || role === 'manager',
     viewPartnerReports: role === 'admin' || role === 'manager',
-    viewSKSOverview:    role === 'admin' || role === 'manager',
+    viewSKSOverview:    true, // All roles can view SKS
 
     deletePartner:   role === 'admin',
     deletePickup:    role === 'admin',
@@ -57,6 +57,9 @@ export function RoleProvider({ children }) {
     recordPickup:    true,
     schedulePickup:  role === 'admin' || role === 'manager',
     manageDonors:    role === 'admin' || role === 'manager',
+
+    // Executive-specific
+    isExecutive:     role === 'executive',
 
     canAccessPage: (page) => (ROLE_PAGES[role] || []).includes(page),
   }
