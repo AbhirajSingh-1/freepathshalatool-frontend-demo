@@ -1,12 +1,13 @@
 // Frontend/src/pages/Payments.jsx
-// RST Revenue Analytics: City + Sector + Society mapping, Monthly default, Detailed/Summary views
-// Payment Tracking: Global sync via AppContext, real-time kabadiwala stats
+// RST Revenue Analytics: City + Sector + Society + Drive mapping, Payment Tracking
 import { useState, useMemo } from 'react'
 import {
   IndianRupee, X, Clock, CheckCircle, AlertCircle,
   Download, History, TrendingUp, Plus, Copy, Check,
   Hash, FileText, CreditCard, Smartphone, BarChart3,
-  MapPin, Layers, List, Building2, ChevronDown,
+  MapPin, Layers, List, Building2, ChevronDown, Users,
+  Truck, ArrowUpRight, ArrowDownRight, Activity, Filter,
+  Package, Weight,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { fmtDate, fmtCurrency, paymentStatusColor, exportToExcel } from '../utils/helpers'
@@ -47,365 +48,525 @@ function OrderIdChip({ orderId, id }) {
   )
 }
 
-// ── Location filter breadcrumb ─────────────────────────────────────────────────
-function LocationBreadcrumb({ city, sector, society, onClearCity, onClearSector, onClearSociety }) {
-  if (!city && !sector && !society) return null
+// ─────────────────────────────────────────────────────────────────────────────
+// A) RST Revenue Analytics — Enhanced with Drive/Mode, payment breakdown
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Mini SVG bar chart
+function MiniBarChart({ data, valueKey, labelKey, color = 'var(--primary)', height = 120 }) {
+  if (!data.length) return null
+  const maxVal = Math.max(...data.map(d => d[valueKey] || 0), 1)
+  const barW   = Math.min(36, Math.floor(280 / data.length) - 4)
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', padding: '8px 12px', background: 'var(--info-bg)', borderRadius: 8, border: '1px solid rgba(59,130,246,0.2)', fontSize: 12 }}>
-      <MapPin size={12} color="var(--info)" />
-      {city && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'var(--info)', color: '#fff', borderRadius: 20, padding: '2px 8px', fontWeight: 700 }}>
-          {city}
-          <button onClick={onClearCity} style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#fff', padding: 0, display: 'flex' }}><X size={10} /></button>
-        </span>
-      )}
-      {sector && <>
-        <span style={{ color: 'var(--info)' }}>›</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(59,130,246,0.15)', color: 'var(--info)', borderRadius: 20, padding: '2px 8px', fontWeight: 600 }}>
-          {sector}
-          <button onClick={onClearSector} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--info)', padding: 0, display: 'flex' }}><X size={10} /></button>
-        </span>
-      </>}
-      {society && <>
-        <span style={{ color: 'var(--info)' }}>›</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'rgba(27,94,53,0.12)', color: 'var(--secondary)', borderRadius: 20, padding: '2px 8px', fontWeight: 600 }}>
-          {society}
-          <button onClick={onClearSociety} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--secondary)', padding: 0, display: 'flex' }}><X size={10} /></button>
-        </span>
-      </>}
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height, padding: '0 4px' }}>
+      {data.map((d, i) => {
+        const pct = ((d[valueKey] || 0) / maxVal) * 100
+        return (
+          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, height: '100%', justifyContent: 'flex-end' }}>
+            <div
+              title={`${d[labelKey]}: ${fmtCurrency(d[valueKey])}`}
+              style={{
+                width: '100%', borderRadius: '3px 3px 0 0',
+                background: color, opacity: 0.85,
+                height: `${Math.max(pct, 2)}%`,
+                transition: 'height 0.3s ease',
+                minHeight: 3,
+              }}
+            />
+            <span style={{ fontSize: 9, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', maxWidth: '100%', textAlign: 'center' }}>
+              {d[labelKey]}
+            </span>
+          </div>
+        )
+      })}
     </div>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// A) RST Revenue Analytics — City + Sector + Society Mapping
-// ─────────────────────────────────────────────────────────────────────────────
-function RSTAnalytics({ raddiRecords }) {
-  const [datePreset, setDatePreset] = useState('month')
-  const [dateFrom,   setDateFrom]   = useState('')
-  const [dateTo,     setDateTo]     = useState('')
-  const [viewType, setViewType]     = useState('monthly')
-  const [groupMode, setGroupMode]   = useState('sector')
+// Payment donut
+function PaymentDonut({ received, total, size = 64 }) {
+  const pct = total > 0 ? Math.min(received / total, 1) : 0
+  const r = (size / 2) - 6
+  const circ = 2 * Math.PI * r
+  const stroke = pct * circ
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border)" strokeWidth="6" />
+      <circle
+        cx={size/2} cy={size/2} r={r} fill="none"
+        stroke={pct === 1 ? 'var(--secondary)' : pct > 0.5 ? 'var(--warning)' : 'var(--danger)'}
+        strokeWidth="6"
+        strokeDasharray={`${stroke} ${circ}`}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size/2} ${size/2})`}
+        style={{ transition: 'stroke-dasharray 0.5s ease' }}
+      />
+      <text x={size/2} y={size/2 + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">
+        {Math.round(pct * 100)}%
+      </text>
+    </svg>
+  )
+}
 
-  // Location filters — City → Sector → Society
+// Date preset helper
+function getDateRange(preset, customFrom, customTo) {
+  const now = new Date()
+  const fmt = d => d.toISOString().slice(0, 10)
+  const y = now.getFullYear(), m = now.getMonth()
+  if (preset === 'today')     return { from: fmt(now), to: fmt(now) }
+  if (preset === 'week')      { const d = new Date(now); d.setDate(d.getDate() - 7); return { from: fmt(d), to: fmt(now) } }
+  if (preset === 'month')     return { from: `${y}-${String(m+1).padStart(2,'0')}-01`, to: fmt(now) }
+  if (preset === 'last_month'){
+    const lm = m === 0 ? 11 : m - 1
+    const ly = m === 0 ? y - 1 : y
+    const last = new Date(ly, lm + 1, 0).getDate()
+    return { from: `${ly}-${String(lm+1).padStart(2,'0')}-01`, to: `${ly}-${String(lm+1).padStart(2,'0')}-${String(last).padStart(2,'0')}` }
+  }
+  if (preset === 'quarter')   {
+    const d = new Date(now); d.setMonth(d.getMonth() - 3)
+    return { from: fmt(d), to: fmt(now) }
+  }
+  if (preset === 'custom')    return { from: customFrom || '', to: customTo || '' }
+  return { from: '', to: '' }
+}
+
+function RSTAnalytics({ raddiRecords, pickups }) {
+  const [datePreset,    setDatePreset]    = useState('month')
+  const [customFrom,    setCustomFrom]    = useState('')
+  const [customTo,      setCustomTo]      = useState('')
+  const [groupMode,     setGroupMode]     = useState('sector')   // sector | society | drive | kabadiwala
   const [filterCity,    setFilterCity]    = useState('')
   const [filterSector,  setFilterSector]  = useState('')
   const [filterSociety, setFilterSociety] = useState('')
+  const [filterMode,    setFilterMode]    = useState('')          // '' | 'Individual' | 'Drive'
+  const [filterPay,     setFilterPay]     = useState('')          // '' | 'Received' | 'Yet to Receive'
+  const [showFilters,   setShowFilters]   = useState(false)
 
-  // Unique cities from records
-  const uniqueCities = useMemo(() =>
-    [...new Set(raddiRecords.map(r => r.city).filter(Boolean))].sort()
-  , [raddiRecords])
+  // Date range
+  const { from: dateFrom, to: dateTo } = useMemo(
+    () => getDateRange(datePreset, customFrom, customTo),
+    [datePreset, customFrom, customTo]
+  )
 
-  // Sectors: if city selected, use CITY_SECTORS; else derive from records
+  // Cascading selects
+  const uniqueCities = useMemo(() => [...new Set(raddiRecords.map(r => r.city).filter(Boolean))].sort(), [raddiRecords])
   const uniqueSectors = useMemo(() => {
     if (filterCity && CITY_SECTORS[filterCity]) return CITY_SECTORS[filterCity]
-    const base = filterCity
-      ? raddiRecords.filter(r => r.city === filterCity)
-      : raddiRecords
-    return [...new Set(base.map(r => r.sector).filter(Boolean))].sort()
+    return [...new Set(raddiRecords.filter(r => !filterCity || r.city === filterCity).map(r => r.sector).filter(Boolean))].sort()
   }, [raddiRecords, filterCity])
-
-  // Societies: if Gurgaon + sector selected, use GURGAON_SOCIETIES; else derive from records
   const uniqueSocieties = useMemo(() => {
-    if (filterCity === 'Gurgaon' && filterSector && GURGAON_SOCIETIES[filterSector]) {
-      return GURGAON_SOCIETIES[filterSector]
-    }
-    const base = raddiRecords.filter(r =>
-      (!filterCity   || r.city === filterCity) &&
-      (!filterSector || r.sector === filterSector)
-    )
-    return [...new Set(base.map(r => r.society).filter(Boolean))].sort()
+    if (filterCity === 'Gurgaon' && filterSector && GURGAON_SOCIETIES[filterSector]) return GURGAON_SOCIETIES[filterSector]
+    return [...new Set(raddiRecords.filter(r => (!filterCity || r.city === filterCity) && (!filterSector || r.sector === filterSector)).map(r => r.society).filter(Boolean))].sort()
   }, [raddiRecords, filterCity, filterSector])
 
-  const dateRange = useMemo(() => {
-    const now = new Date()
-    if (datePreset === 'today') return { from: now.toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) }
-    if (datePreset === 'week')  { const d = new Date(now); d.setDate(d.getDate() - 7); return { from: d.toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) } }
-    if (datePreset === 'month') { const d = new Date(now); d.setDate(1); return { from: d.toISOString().slice(0, 10), to: now.toISOString().slice(0, 10) } }
-    return { from: dateFrom, to: dateTo }
-  }, [datePreset, dateFrom, dateTo])
+  // Filtered records
+  const filtered = useMemo(() => {
+    // raddiRecords = completed pickups; we also need pickup mode from the pickups array
+    const pickupModeMap = {}
+    ;(pickups || []).forEach(p => { pickupModeMap[p.orderId || p.id] = p.pickupMode })
 
-  const filtered = useMemo(() => raddiRecords.filter(r => {
-    const matchDate    = (!dateRange.from || r.pickupDate >= dateRange.from) && (!dateRange.to || r.pickupDate <= dateRange.to)
-    const matchCity    = !filterCity    || r.city    === filterCity
-    const matchSector  = !filterSector  || r.sector  === filterSector
-    const matchSociety = !filterSociety || r.society === filterSociety
-    return matchDate && matchCity && matchSector && matchSociety && r.orderStatus === 'Completed'
-  }), [raddiRecords, dateRange, filterCity, filterSector, filterSociety])
+    return raddiRecords.filter(r => {
+      const inDate   = (!dateFrom || (r.pickupDate || '') >= dateFrom) && (!dateTo || (r.pickupDate || '') <= dateTo)
+      const inCity   = !filterCity    || r.city    === filterCity
+      const inSector = !filterSector  || r.sector  === filterSector
+      const inSoc    = !filterSociety || r.society === filterSociety
+      const mode     = pickupModeMap[r.orderId] || pickupModeMap[r.pickupId] || ''
+      const inMode   = !filterMode || mode === filterMode
+      const inPay    = !filterPay  || r.paymentStatus === filterPay
+      return inDate && inCity && inSector && inSoc && inMode && inPay
+    }).map(r => ({
+      ...r,
+      _pickupMode: pickupModeMap[r.orderId] || pickupModeMap[r.pickupId] || 'Individual',
+    }))
+  }, [raddiRecords, pickups, dateFrom, dateTo, filterCity, filterSector, filterSociety, filterMode, filterPay])
 
-  const timeGrouped = useMemo(() => {
-    const map = {}
+  // Aggregated KPIs
+  const kpis = useMemo(() => {
+    const revenue  = filtered.reduce((s, r) => s + (r.totalAmount || 0), 0)
+    const kg       = filtered.reduce((s, r) => s + (r.totalKg     || 0), 0)
+    const received = filtered.filter(r => r.paymentStatus === 'Received').reduce((s, r) => s + (r.totalAmount || 0), 0)
+    const pending  = filtered.filter(r => r.paymentStatus === 'Yet to Receive').reduce((s, r) => s + (r.totalAmount || 0), 0)
+    const drives   = filtered.filter(r => r._pickupMode === 'Drive').length
+    const indivs   = filtered.filter(r => r._pickupMode !== 'Drive').length
+    return { revenue, kg, orders: filtered.length, received, pending, drives, indivs, avgRate: kg > 0 ? Math.round(revenue / kg) : 0 }
+  }, [filtered])
+
+  // Monthly chart data (last 6 months)
+  const monthlyChart = useMemo(() => {
+    const m = {}
     filtered.forEach(r => {
-      const timeKey = viewType === 'monthly'
-        ? (r.pickupDate || '').slice(0, 7)
-        : (r.pickupDate || '')
-      if (!timeKey) return
-      if (!map[timeKey]) map[timeKey] = { key: timeKey, revenue: 0, kg: 0, count: 0, societies: new Set(), sectors: new Set() }
-      map[timeKey].revenue += r.totalAmount || 0
-      map[timeKey].kg      += r.totalKg     || 0
-      map[timeKey].count   += 1
-      if (r.society) map[timeKey].societies.add(r.society)
-      if (r.sector)  map[timeKey].sectors.add(r.sector)
+      const key = (r.pickupDate || '').slice(0, 7)
+      if (!key) return
+      if (!m[key]) m[key] = { month: key, label: new Date(key + '-01').toLocaleString('default', { month: 'short' }), revenue: 0, count: 0, received: 0 }
+      m[key].revenue   += r.totalAmount || 0
+      m[key].count     += 1
+      m[key].received  += r.paymentStatus === 'Received' ? (r.totalAmount || 0) : 0
     })
-    return Object.values(map)
-      .map(g => ({ ...g, societies: [...g.societies].join(', '), sectors: [...g.sectors].join(', ') }))
-      .sort((a, b) => b.key.localeCompare(a.key))
-  }, [filtered, viewType])
+    return Object.values(m).sort((a, b) => a.month.localeCompare(b.month)).slice(-6)
+  }, [filtered])
 
-  const locationGrouped = useMemo(() => {
-    const map = {}
+  // Grouped table data
+  const groupedData = useMemo(() => {
+    const m = {}
     filtered.forEach(r => {
-      const key  = groupMode === 'society' ? (r.society || 'Unknown') : (r.sector || 'Unknown')
-      const sec  = r.sector  || '—'
-      const soc  = r.society || '—'
-      if (!map[key]) map[key] = { key, sector: sec, society: soc, revenue: 0, kg: 0, orders: 0 }
-      map[key].revenue += r.totalAmount || 0
-      map[key].kg      += r.totalKg     || 0
-      map[key].orders  += 1
+      let key, label, sub
+      if (groupMode === 'society')     { key = r.society || 'Unknown'; label = key; sub = r.sector || '—' }
+      else if (groupMode === 'drive')  { key = r._pickupMode || 'Individual'; label = key; sub = '' }
+      else if (groupMode === 'kabadiwala') { key = r.kabadiwalaName || 'Unassigned'; label = key; sub = '' }
+      else                             { key = r.sector || 'Unknown'; label = key; sub = r.city || '' }
+
+      if (!m[key]) m[key] = { key, label, sub, revenue: 0, kg: 0, orders: 0, received: 0, pending: 0 }
+      m[key].revenue  += r.totalAmount || 0
+      m[key].kg       += r.totalKg     || 0
+      m[key].orders   += 1
+      m[key].received += r.paymentStatus === 'Received' ? (r.totalAmount || 0) : 0
+      m[key].pending  += r.paymentStatus === 'Yet to Receive' ? (r.totalAmount || 0) : 0
     })
-    return Object.values(map).sort((a, b) => b.revenue - a.revenue)
+    return Object.values(m).sort((a, b) => b.revenue - a.revenue)
   }, [filtered, groupMode])
 
-  const totalRevenue = filtered.reduce((s, r) => s + (r.totalAmount || 0), 0)
-  const totalKg      = filtered.reduce((s, r) => s + (r.totalKg     || 0), 0)
-  const totalOrders  = filtered.length
-  const avgRate      = totalKg > 0 ? Math.round(totalRevenue / totalKg) : 0
+  const activeFilterCount = [filterCity, filterSector, filterSociety, filterMode, filterPay].filter(Boolean).length
 
-  const handleCityChange = (val) => { setFilterCity(val); setFilterSector(''); setFilterSociety('') }
-  const handleSectorChange = (val) => { setFilterSector(val); setFilterSociety('') }
-
-  const hasLocationFilter = filterCity || filterSector || filterSociety
+  const PRESETS = [
+    { id: 'today', label: 'Today' },
+    { id: 'week', label: 'Last 7 Days' },
+    { id: 'month', label: 'This Month' },
+    { id: 'last_month', label: 'Last Month' },
+    { id: 'quarter', label: 'Last 3 Months' },
+    { id: '', label: 'All Time' },
+    { id: 'custom', label: 'Custom' },
+  ]
 
   return (
     <div>
-      {/* KPI Row */}
-      <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat-card orange">
-          <div className="stat-icon" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}><TrendingUp size={18}/></div>
-          <div className="stat-value">{fmtCurrency(totalRevenue)}</div>
-          <div className="stat-label">Total Revenue</div>
+      {/* ── Date presets ── */}
+      <div style={{ marginBottom: 16, padding: '12px 16px', background: 'var(--surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <Clock size={14} color="var(--primary)" />
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time Period</span>
         </div>
-        <div className="stat-card green">
-          <div className="stat-icon" style={{ background: 'var(--secondary-light)', color: 'var(--secondary)', fontSize: 11, fontWeight: 800 }}>kg</div>
-          <div className="stat-value">{totalKg.toFixed(1)} kg</div>
-          <div className="stat-label">Raddi Collected</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {PRESETS.map(p => (
+            <button key={p.id} className={`btn btn-sm ${datePreset === p.id ? 'btn-primary' : 'btn-ghost'}`} style={{ fontSize: 12 }} onClick={() => setDatePreset(p.id)}>
+              {p.label}
+            </button>
+          ))}
         </div>
-        <div className="stat-card blue">
-          <div className="stat-icon" style={{ background: 'var(--info-bg)', color: 'var(--info)', fontSize: 14, fontWeight: 800 }}>#</div>
-          <div className="stat-value">{totalOrders}</div>
-          <div className="stat-label">Completed Orders</div>
-        </div>
-        <div className="stat-card yellow">
-          <div className="stat-icon" style={{ background: 'var(--accent-light)', color: '#92400E', fontSize: 10, fontWeight: 800 }}>₹/kg</div>
-          <div className="stat-value">{avgRate}</div>
-          <div className="stat-label">Avg Rate (₹/kg)</div>
-        </div>
-      </div>
-
-      {/* Controls: Date presets */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, alignItems: 'center' }}>
-        {[['today','Today'],['week','Last 7 Days'],['month','This Month'],['custom','Custom']].map(([v, l]) => (
-          <button key={v} className={`btn btn-sm ${datePreset === v ? 'btn-primary' : 'btn-ghost'}`}
-            onClick={() => setDatePreset(v)}>{l}</button>
-        ))}
         {datePreset === 'custom' && (
-          <>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', marginTop: 10, flexWrap: 'wrap' }}>
             <div className="form-group" style={{ margin: 0 }}>
               <label style={{ fontSize: 11, fontWeight: 600 }}>From</label>
-              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+              <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={{ width: 145 }} />
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label style={{ fontSize: 11, fontWeight: 600 }}>To</label>
-              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+              <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ width: 145 }} />
             </div>
-          </>
+          </div>
         )}
       </div>
 
-      {/* Location Filters — City → Sector → Society cascade */}
-      <div style={{ padding: '14px 16px', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border-light)', boxShadow: 'var(--shadow)', marginBottom: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-          <MapPin size={14} color="var(--primary)" />
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Location Filter</span>
-          {hasLocationFilter && (
-            <button className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto', fontSize: 11 }}
-              onClick={() => { setFilterCity(''); setFilterSector(''); setFilterSociety('') }}>
+      {/* ── KPI Summary Cards ── */}
+      <div className="stat-grid" style={{ marginBottom: 20, gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+        <div className="stat-card orange">
+          <div className="stat-icon"><IndianRupee size={18} /></div>
+          <div className="stat-value">{fmtCurrency(kpis.revenue)}</div>
+          <div className="stat-label">Total RST Revenue</div>
+          <div className="stat-change up">{kpis.orders} orders</div>
+        </div>
+        <div className="stat-card green">
+          <div className="stat-icon" style={{ fontSize: 11, fontWeight: 800, background: 'var(--secondary-light)', color: 'var(--secondary)' }}>kg</div>
+          <div className="stat-value">{kpis.kg.toFixed(1)}</div>
+          <div className="stat-label">Raddi Collected</div>
+          <div className="stat-change up">₹{kpis.avgRate}/kg avg</div>
+        </div>
+        <div className="stat-card green">
+          <div className="stat-icon"><CheckCircle size={18} /></div>
+          <div className="stat-value">{fmtCurrency(kpis.received)}</div>
+          <div className="stat-label">Amount Received</div>
+          <div className="stat-change up">{kpis.revenue > 0 ? Math.round((kpis.received / kpis.revenue) * 100) : 0}% collected</div>
+        </div>
+        <div className="stat-card red">
+          <div className="stat-icon"><AlertCircle size={18} /></div>
+          <div className="stat-value">{fmtCurrency(kpis.pending)}</div>
+          <div className="stat-label">Pending Collection</div>
+          <div className="stat-change down">{kpis.revenue > 0 ? Math.round((kpis.pending / kpis.revenue) * 100) : 0}% outstanding</div>
+        </div>
+        <div className="stat-card blue">
+          <div className="stat-icon"><Truck size={18} /></div>
+          <div className="stat-value">{kpis.indivs}</div>
+          <div className="stat-label">Individual Pickups</div>
+          <div className="stat-change up">{kpis.drives} drives</div>
+        </div>
+      </div>
+
+      {/* ── Payment Collection Progress ── */}
+      {kpis.revenue > 0 && (
+        <div style={{ marginBottom: 20, padding: '14px 18px', background: 'var(--surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+          <PaymentDonut received={kpis.received} total={kpis.revenue} size={72} />
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--text-primary)' }}>Payment Collection Status</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {[
+                { label: 'Received', value: kpis.received, color: 'var(--secondary)', bg: 'var(--secondary-light)' },
+                { label: 'Pending',  value: kpis.pending,  color: 'var(--warning)',   bg: 'var(--warning-bg)' },
+                { label: 'Write-off',value: kpis.revenue - kpis.received - kpis.pending, color: 'var(--text-muted)', bg: 'var(--border-light)' },
+              ].filter(s => s.value > 0).map(s => (
+                <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: 'var(--text-secondary)', minWidth: 70 }}>{s.label}</span>
+                  <div style={{ flex: 1, height: 6, background: 'var(--border-light)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', borderRadius: 3, background: s.color, width: `${Math.round((s.value / kpis.revenue) * 100)}%`, transition: 'width 0.5s ease' }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: s.color, minWidth: 80, textAlign: 'right' }}>{fmtCurrency(s.value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Location + Mode Filters ── */}
+      <div style={{ marginBottom: 16, padding: '14px 16px', background: 'var(--surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1 }}>
+            <Filter size={14} color="var(--primary)" />
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Filters</span>
+            {activeFilterCount > 0 && (
+              <span style={{ background: 'var(--primary)', color: '#fff', borderRadius: '50%', width: 18, height: 18, fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>{activeFilterCount}</span>
+            )}
+          </div>
+          {activeFilterCount > 0 && (
+            <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => { setFilterCity(''); setFilterSector(''); setFilterSociety(''); setFilterMode(''); setFilterPay('') }}>
               <X size={10} /> Clear All
             </button>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           {/* City */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
-              <Building2 size={11} /> City
+            <label style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <Building2 size={10} /> City
             </label>
-            <select value={filterCity} onChange={e => handleCityChange(e.target.value)} style={{ fontSize: 13, width: '100%' }}>
+            <select value={filterCity} onChange={e => { setFilterCity(e.target.value); setFilterSector(''); setFilterSociety('') }} style={{ fontSize: 12.5, width: '100%' }}>
               <option value="">All Cities</option>
               {(uniqueCities.length > 0 ? uniqueCities : CITIES).map(c => <option key={c}>{c}</option>)}
             </select>
           </div>
 
-          {/* Sector — cascades from city */}
+          {/* Sector */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
-              <MapPin size={11} /> Sector
-              {filterCity && <span style={{ fontSize: 10, color: 'var(--info)', marginLeft: 2 }}>in {filterCity}</span>}
+            <label style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <MapPin size={10} /> Sector
             </label>
-            <select value={filterSector} onChange={e => handleSectorChange(e.target.value)} style={{ fontSize: 13, width: '100%' }} disabled={!filterCity}>
-              <option value="">{filterCity ? `All sectors in ${filterCity}` : 'Select city first'}</option>
+            <select value={filterSector} onChange={e => { setFilterSector(e.target.value); setFilterSociety('') }} disabled={!filterCity} style={{ fontSize: 12.5, width: '100%' }}>
+              <option value="">{filterCity ? 'All Sectors' : 'Select city first'}</option>
               {uniqueSectors.map(s => <option key={s}>{s}</option>)}
             </select>
           </div>
 
-          {/* Society — cascades from city + sector */}
+          {/* Society */}
           <div>
-            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
-              <MapPin size={11} /> Society
-              {filterSector && <span style={{ fontSize: 10, color: 'var(--secondary)', marginLeft: 2 }}>in {filterSector}</span>}
+            <label style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <List size={10} /> Society
             </label>
-            <select value={filterSociety} onChange={e => setFilterSociety(e.target.value)} style={{ fontSize: 13, width: '100%' }} disabled={!filterSector}>
-              <option value="">{filterSector ? `All societies in ${filterSector}` : 'Select sector first'}</option>
+            <select value={filterSociety} onChange={e => setFilterSociety(e.target.value)} disabled={!filterSector} style={{ fontSize: 12.5, width: '100%' }}>
+              <option value="">{filterSector ? 'All Societies' : 'Select sector first'}</option>
               {uniqueSocieties.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+
+          {/* Pickup Mode */}
+          <div>
+            <label style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <Truck size={10} /> Mode
+            </label>
+            <select value={filterMode} onChange={e => setFilterMode(e.target.value)} style={{ fontSize: 12.5, width: '100%' }}>
+              <option value="">All Modes</option>
+              <option value="Individual">Individual</option>
+              <option value="Drive">Drive / Campaign</option>
+            </select>
+          </div>
+
+          {/* Payment Status */}
+          <div>
+            <label style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+              <IndianRupee size={10} /> Payment
+            </label>
+            <select value={filterPay} onChange={e => setFilterPay(e.target.value)} style={{ fontSize: 12.5, width: '100%' }}>
+              <option value="">All Statuses</option>
+              <option value="Received">Received</option>
+              <option value="Yet to Receive">Yet to Receive</option>
+              <option value="Write-off">Write-off</option>
             </select>
           </div>
         </div>
 
-        {/* Breadcrumb */}
-        {hasLocationFilter && (
-          <div style={{ marginTop: 10 }}>
-            <LocationBreadcrumb
-              city={filterCity} sector={filterSector} society={filterSociety}
-              onClearCity={() => handleCityChange('')}
-              onClearSector={() => { setFilterSector(''); setFilterSociety('') }}
-              onClearSociety={() => setFilterSociety('')}
-            />
+        {/* Active breadcrumb chips */}
+        {activeFilterCount > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+            {[
+              { val: filterCity,    label: filterCity,    clear: () => { setFilterCity(''); setFilterSector(''); setFilterSociety('') } },
+              { val: filterSector,  label: filterSector,  clear: () => { setFilterSector(''); setFilterSociety('') } },
+              { val: filterSociety, label: filterSociety, clear: () => setFilterSociety('') },
+              { val: filterMode,    label: filterMode,    clear: () => setFilterMode('') },
+              { val: filterPay,     label: filterPay,     clear: () => setFilterPay('') },
+            ].filter(c => c.val).map((c, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, background: 'var(--primary-light)', color: 'var(--primary)', fontSize: 11.5, fontWeight: 600, border: '1px solid rgba(232,82,26,0.2)' }}>
+                {c.label}
+                <button onClick={c.clear} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 0, display: 'flex' }}><X size={10} /></button>
+              </span>
+            ))}
           </div>
         )}
       </div>
 
-      {/* View toggles */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20, alignItems: 'center', padding: '10px 14px', background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border-light)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Time View</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            {[['monthly','Monthly'],['daily','Daily']].map(([v, l]) => (
-              <button key={v} className={`btn btn-sm ${viewType === v ? 'btn-outline' : 'btn-ghost'}`}
-                onClick={() => setViewType(v)} style={{ fontSize: 12 }}>{l}</button>
-            ))}
+      {/* ── Charts + Grouped Table ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 20 }}>
+
+        {/* Monthly revenue chart */}
+        <div className="card">
+          <div className="card-header">
+            <Activity size={15} color="var(--primary)" />
+            <div className="card-title">Monthly RST Revenue</div>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>{monthlyChart.length} months</span>
+          </div>
+          <div className="card-body" style={{ paddingBottom: 8 }}>
+            {monthlyChart.length === 0 ? (
+              <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No data for period</div>
+            ) : (
+              <>
+                <MiniBarChart data={monthlyChart} valueKey="revenue" labelKey="label" color="var(--primary)" height={110} />
+                <div style={{ marginTop: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  {monthlyChart.slice(-3).map(m => (
+                    <div key={m.month} style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--primary)' }}>{m.label}</span>: {fmtCurrency(m.revenue)}
+                      {m.revenue > 0 && <span style={{ color: 'var(--secondary)', marginLeft: 4 }}>({Math.round((m.received / m.revenue) * 100)}% rcvd)</span>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
-        <div style={{ width: 1, height: 36, background: 'var(--border)', flexShrink: 0 }} />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Group By</span>
-          <div style={{ display: 'flex', gap: 4 }}>
-            <button className={`btn btn-sm ${groupMode === 'sector' ? 'btn-outline' : 'btn-ghost'}`} onClick={() => setGroupMode('sector')} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Layers size={12} /> Sector
-            </button>
-            <button className={`btn btn-sm ${groupMode === 'society' ? 'btn-outline' : 'btn-ghost'}`} onClick={() => setGroupMode('society')} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <List size={12} /> Society
-            </button>
+
+        {/* Top sectors/societies */}
+        <div className="card">
+          <div className="card-header">
+            <BarChart3 size={15} color="var(--secondary)" />
+            <div className="card-title">Top by Revenue</div>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Top 5</span>
           </div>
-        </div>
-        <div style={{ marginLeft: 'auto' }}>
-          <button className="btn btn-ghost btn-sm" onClick={() => exportToExcel(
-            filtered.map(r => ({
-              'Pickup Date': r.pickupDate, 'City': r.city, 'Society': r.society, 'Sector': r.sector,
-              'Kabadiwala': r.kabadiwalaName, 'Total KG': r.totalKg, 'Revenue (₹)': r.totalAmount,
-              'Payment': r.paymentStatus, 'Order': r.orderStatus,
-            })), 'RST_Revenue_Analytics')}>
-            <Download size={13} /> Export
-          </button>
+          <div className="card-body" style={{ paddingBottom: 8 }}>
+            {groupedData.length === 0 ? (
+              <div style={{ height: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>No data</div>
+            ) : (
+              groupedData.slice(0, 5).map((g, i) => {
+                const maxRev = groupedData[0].revenue || 1
+                const pct    = Math.round((g.revenue / maxRev) * 100)
+                return (
+                  <div key={g.key} style={{ marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ width: 16, height: 16, borderRadius: '50%', background: 'var(--secondary-light)', color: 'var(--secondary)', fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{i + 1}</span>
+                      <span style={{ fontWeight: 600, fontSize: 12.5, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.label}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--secondary)', flexShrink: 0 }}>{fmtCurrency(g.revenue)}</span>
+                    </div>
+                    <div style={{ height: 5, background: 'var(--border-light)', borderRadius: 3, overflow: 'hidden', marginLeft: 24 }}>
+                      <div style={{ height: '100%', borderRadius: 3, background: `hsl(${140 + i * 10}, 50%, ${40 + i * 5}%)`, width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
       </div>
 
-      <div className="two-col" style={{ marginBottom: 20 }}>
-        {/* Time-series table */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <BarChart3 size={15} color="var(--primary)" />
-              {viewType === 'monthly' ? 'Monthly' : 'Daily'} Revenue
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{timeGrouped.length} period{timeGrouped.length !== 1 ? 's' : ''}</span>
-          </div>
-          <div className="table-wrap" style={{ border: 'none', boxShadow: 'none', borderRadius: 0 }}>
-            <table>
-              <thead>
-                <tr><th>{viewType === 'monthly' ? 'Month' : 'Date'}</th><th>Orders</th><th>Kg</th><th>Revenue</th></tr>
-              </thead>
-              <tbody>
-                {timeGrouped.length === 0 ? (
-                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No data for selected range</td></tr>
-                ) : timeGrouped.map(g => (
-                  <tr key={g.key}>
-                    <td style={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 600 }}>{g.key}</td>
-                    <td style={{ fontWeight: 600 }}>{g.count}</td>
-                    <td style={{ fontWeight: 600 }}>{g.kg.toFixed(1)} kg</td>
-                    <td style={{ fontWeight: 700, color: 'var(--secondary)' }}>{fmtCurrency(g.revenue)}</td>
-                  </tr>
-                ))}
-                {timeGrouped.length > 0 && (
-                  <tr style={{ background: 'var(--secondary-light)' }}>
-                    <td style={{ fontWeight: 700, fontSize: 12.5 }}>Total</td>
-                    <td style={{ fontWeight: 700 }}>{totalOrders}</td>
-                    <td style={{ fontWeight: 700 }}>{totalKg.toFixed(1)} kg</td>
-                    <td style={{ fontWeight: 800, color: 'var(--secondary)' }}>{fmtCurrency(totalRevenue)}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+      {/* ── Group toggle + detailed table ── */}
+      <div className="card">
+        <div className="card-header" style={{ flexWrap: 'wrap', gap: 10 }}>
+          <div className="card-title">Detailed Breakdown</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginLeft: 'auto', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>Group by:</span>
+            {[
+              { id: 'sector',      label: 'Sector', icon: <Layers size={11} /> },
+              { id: 'society',     label: 'Society', icon: <List size={11} /> },
+              { id: 'drive',       label: 'Mode', icon: <Truck size={11} /> },
+              { id: 'kabadiwala',  label: 'Partner', icon: <Users size={11} /> },
+            ].map(g => (
+              <button key={g.id} className={`btn btn-sm ${groupMode === g.id ? 'btn-outline' : 'btn-ghost'}`}
+                onClick={() => setGroupMode(g.id)} style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                {g.icon}{g.label}
+              </button>
+            ))}
+            <button className="btn btn-ghost btn-sm" style={{ marginLeft: 4 }} onClick={() => exportToExcel(
+              filtered.map(r => ({
+                'Pickup Date': r.pickupDate, 'City': r.city, 'Sector': r.sector, 'Society': r.society,
+                'Mode': r._pickupMode, 'Kabadiwala': r.kabadiwalaName,
+                'Total KG': r.totalKg, 'Revenue (₹)': r.totalAmount,
+                'Amount Paid (₹)': r.amountPaid || 0, 'Payment Status': r.paymentStatus,
+              })), 'RST_Revenue_Analytics')}>
+              <Download size={12} /> Export
+            </button>
           </div>
         </div>
-
-        {/* Location grouping table */}
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">
-              {groupMode === 'society' ? (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><List size={14} color="var(--secondary)" /> Detailed — by Society</span>
-              ) : (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Layers size={14} color="var(--primary)" /> Summary — by Sector</span>
-              )}
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 'auto' }}>{locationGrouped.length} {groupMode === 'society' ? 'societies' : 'sectors'}</span>
-          </div>
-          <div className="table-wrap" style={{ border: 'none', boxShadow: 'none', borderRadius: 0 }}>
-            <table>
-              <thead>
-                <tr>
-                  {groupMode === 'society' ? <th>Society (Sector)</th> : <th>Sector</th>}
-                  <th>Orders</th><th>Kg</th><th>Revenue</th>
-                </tr>
-              </thead>
-              <tbody>
-                {locationGrouped.length === 0 ? (
-                  <tr><td colSpan={4} style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)' }}>No data</td></tr>
-                ) : locationGrouped.map(g => (
+        <div className="table-wrap" style={{ border: 'none', boxShadow: 'none', borderRadius: 0 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>{groupMode === 'society' ? 'Society' : groupMode === 'drive' ? 'Mode' : groupMode === 'kabadiwala' ? 'Partner' : 'Sector'}</th>
+                {groupMode === 'society' && <th>Sector</th>}
+                <th>Orders</th>
+                <th>Weight (kg)</th>
+                <th>Revenue (₹)</th>
+                <th>Received</th>
+                <th>Pending</th>
+                <th>Collection</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groupedData.length === 0 ? (
+                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 28, color: 'var(--text-muted)' }}>No data for selected filters</td></tr>
+              ) : groupedData.map(g => {
+                const collPct = g.revenue > 0 ? Math.round((g.received / g.revenue) * 100) : 0
+                return (
                   <tr key={g.key}>
-                    <td>
-                      {groupMode === 'society' ? (
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 13 }}>{g.key}</div>
-                          {g.sector !== '—' && (
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
-                              <MapPin size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />{g.sector}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{g.key}</div>
-                      )}
-                    </td>
-                    <td>{g.orders}</td>
-                    <td style={{ fontWeight: 600 }}>{g.kg.toFixed(1)} kg</td>
+                    <td style={{ fontWeight: 600, fontSize: 13 }}>{g.label}</td>
+                    {groupMode === 'society' && <td style={{ fontSize: 12, color: 'var(--text-muted)' }}><MapPin size={10} style={{ verticalAlign: 'middle', marginRight: 3 }} />{g.sub}</td>}
+                    <td style={{ fontWeight: 600 }}>{g.orders}</td>
+                    <td>{g.kg.toFixed(1)} kg</td>
                     <td style={{ fontWeight: 700, color: 'var(--primary)' }}>{fmtCurrency(g.revenue)}</td>
+                    <td style={{ color: 'var(--secondary)', fontWeight: 700 }}>{g.received > 0 ? fmtCurrency(g.received) : '—'}</td>
+                    <td style={{ color: g.pending > 0 ? 'var(--danger)' : 'var(--text-muted)', fontWeight: g.pending > 0 ? 700 : 400 }}>
+                      {g.pending > 0 ? fmtCurrency(g.pending) : '—'}
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 60, height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden', flexShrink: 0 }}>
+                          <div style={{ height: '100%', borderRadius: 3, background: collPct === 100 ? 'var(--secondary)' : collPct > 50 ? 'var(--warning)' : 'var(--danger)', width: `${collPct}%` }} />
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>{collPct}%</span>
+                      </div>
+                    </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                )
+              })}
+              {groupedData.length > 0 && (
+                <tr style={{ background: 'var(--secondary-light)', fontWeight: 700 }}>
+                  <td colSpan={groupMode === 'society' ? 2 : 1} style={{ fontWeight: 800, fontSize: 13 }}>Grand Total</td>
+                  <td>{kpis.orders}</td>
+                  <td>{kpis.kg.toFixed(1)} kg</td>
+                  <td style={{ color: 'var(--primary)' }}>{fmtCurrency(kpis.revenue)}</td>
+                  <td style={{ color: 'var(--secondary)' }}>{fmtCurrency(kpis.received)}</td>
+                  <td style={{ color: kpis.pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{kpis.pending > 0 ? fmtCurrency(kpis.pending) : '—'}</td>
+                  <td style={{ fontSize: 12, fontWeight: 700 }}>
+                    {kpis.revenue > 0 ? `${Math.round((kpis.received / kpis.revenue) * 100)}% rcvd` : '—'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -488,12 +649,11 @@ function KabadiwalaTracking({ pickups, kabadiwalas, updatePickup }) {
 
   return (
     <div>
-      {/* Summary */}
       <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat-card orange"><div className="stat-icon" style={{ background:'var(--primary-light)',color:'var(--primary)' }}><TrendingUp size={18}/></div><div className="stat-value">{fmtCurrency(totalValue)}</div><div className="stat-label">Total RST Value</div></div>
-        <div className="stat-card green"><div className="stat-icon" style={{ background:'var(--secondary-light)',color:'var(--secondary)' }}><CheckCircle size={18}/></div><div className="stat-value">{fmtCurrency(totalPaid)}</div><div className="stat-label">Total Received</div></div>
-        <div className="stat-card red"><div className="stat-icon" style={{ background:'var(--danger-bg)',color:'var(--danger)' }}><Clock size={18}/></div><div className="stat-value">{fmtCurrency(totalPending)}</div><div className="stat-label">Total Pending</div></div>
-        <div className="stat-card blue"><div className="stat-icon" style={{ background:'var(--info-bg)',color:'var(--info)' }}><AlertCircle size={18}/></div><div className="stat-value">{filtered.filter(p => p.paymentStatus !== 'Paid').length}</div><div className="stat-label">Unpaid Entries</div></div>
+        <div className="stat-card orange"><div className="stat-icon"><TrendingUp size={18}/></div><div className="stat-value">{fmtCurrency(totalValue)}</div><div className="stat-label">Total RST Value</div></div>
+        <div className="stat-card green"><div className="stat-icon"><CheckCircle size={18}/></div><div className="stat-value">{fmtCurrency(totalPaid)}</div><div className="stat-label">Total Received</div></div>
+        <div className="stat-card red"><div className="stat-icon"><Clock size={18}/></div><div className="stat-value">{fmtCurrency(totalPending)}</div><div className="stat-label">Total Pending</div></div>
+        <div className="stat-card blue"><div className="stat-icon"><AlertCircle size={18}/></div><div className="stat-value">{filtered.filter(p => p.paymentStatus !== 'Paid').length}</div><div className="stat-label">Unpaid Entries</div></div>
       </div>
 
       {kabSummary.length > 0 && (
@@ -517,7 +677,6 @@ function KabadiwalaTracking({ pickups, kabadiwalas, updatePickup }) {
         </div>
       )}
 
-      {/* Filters */}
       <div className="filter-bar" style={{ flexWrap:'wrap', gap:10, marginBottom:16 }}>
         <select value={filterKab} onChange={e => setFilterKab(e.target.value)} style={{ flex:'1 1 160px' }}>
           <option value="All">All Kabadiwalas</option>
@@ -773,7 +932,7 @@ export default function Payments() {
         </div>
       </div>
 
-      {view === 'analytics'  && <RSTAnalytics raddiRecords={raddiRecords} />}
+      {view === 'analytics'  && <RSTAnalytics raddiRecords={raddiRecords} pickups={pickups} />}
       {view === 'kabadiwala' && <KabadiwalaTracking pickups={pickups} kabadiwalas={kabadiwalas} updatePickup={updatePickup} />}
     </div>
   )
