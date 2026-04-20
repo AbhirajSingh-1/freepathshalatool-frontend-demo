@@ -326,21 +326,7 @@ export default function RaddiMaster() {
   return (
     <div className="page-body">
 
-      {/* ── Page heading ── */}
-      <div style={{ marginBottom: 20, padding: '14px 18px', background: 'var(--secondary-light)', borderRadius: 'var(--radius)', border: '1px solid rgba(27,94,53,0.15)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ width: 42, height: 42, borderRadius: 10, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <Package size={20} color="white" />
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--secondary)' }}>Raddi Master</div>
-          <div style={{ fontSize: 12, color: 'var(--secondary)', opacity: 0.7 }}>
-            Complete pickup ledger · {raddiRecords.length} total records · Live updates as pickups are recorded
-          </div>
-        </div>
-        <button className="btn btn-ghost btn-sm" onClick={handleExport} style={{ flexShrink: 0 }}>
-          <Download size={13} /> Export All ({filtered.length})
-        </button>
-      </div>
+      
 
       {/* ── KPI Cards ── */}
       <div className="stat-grid" style={{ marginBottom: 16 }}>

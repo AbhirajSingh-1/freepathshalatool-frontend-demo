@@ -412,36 +412,47 @@ export function AppProvider({ children }) {
     }
   }, [])
 
+  // ── CLEAR PARTNER BALANCE (supports paid + write-off modes) ───────────────
   const clearPartnerBalance = useCallback(async ({ kabId, kabName }, paymentInfo) => {
     await delay()
     const {
-      refMode   = 'cash',
-      refValue  = '',
-      notes     = '',
+      refMode    = 'cash',
+      refValue   = '',
+      notes      = '',
       date:  payDate,
       screenshot = null,
+      writeOff   = false,   // true = write-off mode; false = paid
     } = paymentInfo || {}
     const payD = payDate || today()
 
+    const pickupFinalStatus = writeOff ? 'Write Off' : 'Paid'
+    const raddiFinalStatus  = writeOff ? 'Write-off' : 'Received'
+    const txFinalStatus     = writeOff ? 'Write Off' : 'Paid'
+
     setPickups(prevPickups => {
-      const totalClearing = prevPickups
-        .filter(p =>
-          p.kabadiwala === kabName &&
-          (p.paymentStatus === 'Not Paid' || p.paymentStatus === 'Partially Paid') &&
-          (p.totalValue || 0) > 0
-        )
-        .reduce((s, p) => s + Math.max(0, (p.totalValue || 0) - (p.amountPaid || 0)), 0)
+      const totalClearing = writeOff
+        ? 0  // No money received in write-off
+        : prevPickups
+            .filter(p =>
+              p.kabadiwala === kabName &&
+              (p.paymentStatus === 'Not Paid' || p.paymentStatus === 'Partially Paid') &&
+              (p.totalValue || 0) > 0
+            )
+            .reduce((s, p) => s + Math.max(0, (p.totalValue || 0) - (p.amountPaid || 0)), 0)
 
       setKabs(prevKabs => prevKabs.map(k => {
         if (k.id !== kabId) return k
         return {
           ...k,
-          amountReceived: (k.amountReceived || 0) + totalClearing,
-          pendingAmount:  0,
-          transactions:   (k.transactions || []).map(tx => ({
+          // Write-off: pending zeroed but amountReceived does NOT increase
+          amountReceived: writeOff
+            ? (k.amountReceived || 0)
+            : (k.amountReceived || 0) + totalClearing,
+          pendingAmount: 0,
+          transactions: (k.transactions || []).map(tx => ({
             ...tx,
-            paid:   tx.value || 0,
-            status: 'Paid',
+            paid:   writeOff ? (tx.paid || 0) : (tx.value || 0),
+            status: txFinalStatus,
           })),
         }
       }))
@@ -449,27 +460,31 @@ export function AppProvider({ children }) {
       setRaddi(prevRaddi => prevRaddi.map(r => {
         if (r.kabadiwalaName !== kabName) return r
         if (r.paymentStatus === 'Received' || r.paymentStatus === 'Write-off') return r
-        return { ...r, amountPaid: r.totalAmount || 0, paymentStatus: 'Received' }
+        return {
+          ...r,
+          amountPaid:    writeOff ? (r.amountPaid || 0) : (r.totalAmount || 0),
+          paymentStatus: raddiFinalStatus,
+        }
       }))
 
       return prevPickups.map(p => {
         if (p.kabadiwala !== kabName) return p
         if (p.paymentStatus === 'Paid' || p.paymentStatus === 'Write Off') return p
-        const rem = Math.max(0, (p.totalValue || 0) - (p.amountPaid || 0))
+        const rem    = Math.max(0, (p.totalValue || 0) - (p.amountPaid || 0))
         if (rem <= 0) return p
-        const newPaid = (p.amountPaid || 0) + rem
+        const newPaid = writeOff ? (p.amountPaid || 0) : (p.amountPaid || 0) + rem
         return {
           ...p,
           amountPaid:    newPaid,
-          paymentStatus: 'Paid',
+          paymentStatus: pickupFinalStatus,
           payHistory: [...(p.payHistory || []), {
             date:        payD,
-            amount:      rem,
+            amount:      writeOff ? 0 : rem,
             cumulative:  newPaid,
-            refMode,
+            refMode:     writeOff ? 'writeoff' : refMode,
             refValue,
-            notes,
-            screenshot,
+            notes:       notes || (writeOff ? 'Written off' : ''),
+            screenshot:  writeOff ? null : screenshot,
           }],
         }
       })
