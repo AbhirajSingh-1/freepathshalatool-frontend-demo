@@ -25,7 +25,7 @@ const buildNav = (role) => {
     { section: 'Main' },
     { id: 'dashboard',       label: 'Dashboard',        icon: LayoutDashboard },
     { section: 'Management' },
-    { id: 'donors',          label: 'Donors & Supporters',            icon: Users },
+    { id: 'donors',          label: 'Donors Status',            icon: Users },
     { id: 'pickups',         label: 'Pickups',           icon: Truck },
     { id: 'pickuppartners',  label: 'Pickup Partners',   icon: UserCheck },
     { section: 'Finance' },
