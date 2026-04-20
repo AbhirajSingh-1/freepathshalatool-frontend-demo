@@ -8,6 +8,7 @@ const PAGE_META = {
   pickuppartners:  { title: 'Pickup Partners',        sub: 'Scrap dealer directory & financials' },
   payments:        { title: 'Payment Tracking',       sub: 'Track & update pickup partner payments' },
   pickupscheduler: { title: 'Pickup Scheduler',       sub: 'Schedule pickups for donors' },
+  todaypickups:    { title: "Today's Pickups",        sub: 'Your pickup assignments for today' },
   pickupoverview:  { title: 'Pickup Overview',        sub: 'Individual & drive analytics — admin view' },
   raddimaster:     { title: 'Raddi Master',           sub: 'Complete pickup data — all orders in one view' },
   sksoverview:     { title: 'SKS Overview',           sub: 'Warehouse tracking for donated goods' },

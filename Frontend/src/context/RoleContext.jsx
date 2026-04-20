@@ -9,15 +9,15 @@ export const ROLES = {
 
 // Pages each role may access
 export const ROLE_PAGES = {
-  admin:     ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'raddimaster', 'sksoverview'],
-  manager:   ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'pickupoverview', 'sksoverview'],
-  executive: ['pickups', 'pickuppartners', 'sksoverview'],
+  admin:     ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'todaypickups', 'pickupoverview', 'raddimaster', 'sksoverview'],
+  manager:   ['dashboard', 'donors', 'pickups', 'pickuppartners', 'payments', 'pickupscheduler', 'todaypickups', 'pickupoverview', 'sksoverview'],
+  executive: ['todaypickups', 'pickups', 'pickuppartners', 'sksoverview'],
 }
 
 export const DEFAULT_PAGE = {
   admin:     'dashboard',
   manager:   'dashboard',
-  executive: 'pickups',
+  executive: 'todaypickups',
 }
 
 const RoleContext = createContext(null)
@@ -48,6 +48,7 @@ export function RoleProvider({ children }) {
     viewPickupOverview: role === 'admin' || role === 'manager',
     viewPartnerReports: role === 'admin' || role === 'manager',
     viewSKSOverview:    true, // All roles can view SKS
+    viewTodayPickups:   true, // All roles can see today's pickups
 
     deletePartner:   role === 'admin',
     deletePickup:    role === 'admin',

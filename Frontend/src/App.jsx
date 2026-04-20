@@ -13,6 +13,7 @@ import PickupScheduler    from './pages/PickupScheduler'
 import PickupOverview     from './pages/PickupOverview'
 import RaddiMaster        from './pages/RaddiMaster'
 import SKSOverview        from './pages/SKSOverview'
+import TodayPickups       from './pages/TodayPickups'
 
 const PAGES = {
   dashboard:       Dashboard,
@@ -21,6 +22,7 @@ const PAGES = {
   pickuppartners:  PickupPartners,
   payments:        Payments,
   pickupscheduler: PickupScheduler,
+  todaypickups:    TodayPickups,
   pickupoverview:  PickupOverview,
   raddimaster:     RaddiMaster,
   sksoverview:     SKSOverview,
@@ -111,6 +113,7 @@ function AppShell() {
   const [page, setPage]      = useState(() => getValidPage(window.location.hash.replace('#', '')))
   const [sidebarOpen, setSO] = useState(false)
   const [addDonor, setAddD]  = useState(false)
+  const [pickupInitDonorId, setPickupInitDonorId] = useState(null)
 
   useEffect(() => {
     if (!(ROLE_PAGES[role] || []).includes(page)) {
@@ -120,11 +123,13 @@ function AppShell() {
     }
   }, [role]) // eslint-disable-line
 
-  const navigate = (p) => {
+  const navigate = (p, opts = {}) => {
     if (!(ROLE_PAGES[role] || []).includes(p)) return
     setPage(p)
     window.location.hash = p
     setSO(false)
+    // Store donor ID so Pickups page can auto-select it (used by TodayPickups)
+    setPickupInitDonorId(p === 'pickups' && opts?.donorId ? opts.donorId : null)
   }
 
   useEffect(() => {
@@ -162,6 +167,8 @@ function AppShell() {
             onNav={navigate}
             triggerAddDonor={addDonor}
             onAddDonorDone={() => setAddD(false)}
+            initialDonorId={page === 'pickups' ? pickupInitDonorId : undefined}
+            onDonorApplied={() => setPickupInitDonorId(null)}
           />
         ) : (
           <AccessDenied onBack={() => navigate(DEFAULT_PAGE[role] || 'pickups')} />
@@ -180,4 +187,4 @@ export default function App() {
       </RoleProvider>
     </AppProvider>
   )
-}                           
+}

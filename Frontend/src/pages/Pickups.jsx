@@ -490,7 +490,7 @@ function DonorPickupHistory({ donor, pickups }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-export default function Pickups() {
+export default function Pickups({ initialDonorId, onDonorApplied }) {
   // FIX: Use kabadiwalas (aliased as partners in AppContext) — both work now
   const { donors, kabadiwalas: partners, pickups, addDonor, createPickup } = useApp()
 
@@ -535,6 +535,14 @@ export default function Pickups() {
       setForm(f => ({ ...f, totalValue: String(rstEstimatedValue) }))
     }
   }, [rstEstimatedValue])
+
+  // Auto-select donor when arriving from TodayPickups "Record Pickup" button
+  useEffect(() => {
+    if (initialDonorId) {
+      setForm(f => ({ ...f, donorId: initialDonorId }))
+      onDonorApplied?.()
+    }
+  }, [initialDonorId]) // eslint-disable-line
 
   const set = useCallback((key, val) => {
     setForm(f => {

@@ -1,7 +1,7 @@
 // Frontend/src/component/Layout/Sidebar.jsx
 import {
   LayoutDashboard, Users, Truck, UserCheck, BarChart3,
-  IndianRupee, CalendarDays, Table2, Eye, Shirt,
+  IndianRupee, CalendarDays, Table2, Eye, Shirt, ClipboardList,
 } from 'lucide-react'
 
 const getRole = () => localStorage.getItem('fp_role') || 'admin'
@@ -13,6 +13,8 @@ const buildNav = (role) => {
 
   if (isExecutive) {
     return [
+      { section: 'Today' },
+      { id: 'todaypickups',   label: "Today's Pickups",  icon: ClipboardList },
       { section: 'Field Operations' },
       { id: 'pickups',        label: 'Record Pickup',    icon: Truck },
       { id: 'pickuppartners', label: 'Pickup Partners',  icon: UserCheck },
@@ -25,13 +27,14 @@ const buildNav = (role) => {
     { section: 'Main' },
     { id: 'dashboard',       label: 'Dashboard',        icon: LayoutDashboard },
     { section: 'Management' },
-    { id: 'donors',          label: 'Donors Status',            icon: Users },
-    { id: 'pickups',         label: 'Pickups',           icon: Truck },
-    { id: 'pickuppartners',  label: 'Pickup Partners',   icon: UserCheck },
+    { id: 'donors',          label: 'Donors Status',    icon: Users },
+    { id: 'pickups',         label: 'Pickups',          icon: Truck },
+    { id: 'pickuppartners',  label: 'Pickup Partners',  icon: UserCheck },
     { section: 'Finance' },
-    { id: 'payments',        label: 'Payment Tracking',  icon: IndianRupee },
+    { id: 'payments',        label: 'Payment Tracking', icon: IndianRupee },
     { section: 'Scheduling' },
-    { id: 'pickupscheduler', label: 'Pickup Scheduler',  icon: CalendarDays },
+    { id: 'pickupscheduler', label: 'Pickup Scheduler', icon: CalendarDays },
+    { id: 'todaypickups',    label: "Today's Pickups",  icon: ClipboardList },
     ...(isAdmin || isManager
       ? [{ id: 'pickupoverview', label: 'Pickup Overview', icon: Eye }]
       : []
