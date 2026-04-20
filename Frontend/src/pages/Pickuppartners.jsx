@@ -150,7 +150,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
       <div className="form-group" style={{ margin: '0 0 12px' }}>
         <label style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <span>Coverage Sectors <span className="required">*</span></span>
-          <span style={{ fontSize:11, fontWeight:400, color:'var(--text-muted)' }}>Max 2 ({safeSectors.length}/2)</span>
+          <span style={{ fontSize:11, fontWeight:400, color:'var(--text-muted)' }}>Max 3 ({safeSectors.length}/3)</span>
         </label>
         <div style={{ position:'relative' }}>
           <div
