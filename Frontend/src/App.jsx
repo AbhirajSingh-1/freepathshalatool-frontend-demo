@@ -113,7 +113,10 @@ function AppShell() {
   const [page, setPage]      = useState(() => getValidPage(window.location.hash.replace('#', '')))
   const [sidebarOpen, setSO] = useState(false)
   const [addDonor, setAddD]  = useState(false)
-  const [pickupInitDonorId, setPickupInitDonorId] = useState(null)
+
+  // Track donor & pickup pre-selection when navigating to Pickups
+  const [pickupInitDonorId,  setPickupInitDonorId]  = useState(null)
+  const [pickupInitPickupId, setPickupInitPickupId] = useState(null)
 
   useEffect(() => {
     if (!(ROLE_PAGES[role] || []).includes(page)) {
@@ -128,8 +131,10 @@ function AppShell() {
     setPage(p)
     window.location.hash = p
     setSO(false)
-    // Store donor ID so Pickups page can auto-select it (used by TodayPickups)
-    setPickupInitDonorId(p === 'pickups' && opts?.donorId ? opts.donorId : null)
+    // Pre-select donor when linking to Pickups
+    setPickupInitDonorId(p === 'pickups' && opts?.donorId  ? opts.donorId  : null)
+    // Pre-select existing scheduled pickup when linking from TodayPickups → Record
+    setPickupInitPickupId(p === 'pickups' && opts?.pickupId ? opts.pickupId : null)
   }
 
   useEffect(() => {
@@ -167,8 +172,10 @@ function AppShell() {
             onNav={navigate}
             triggerAddDonor={addDonor}
             onAddDonorDone={() => setAddD(false)}
-            initialDonorId={page === 'pickups' ? pickupInitDonorId : undefined}
+            initialDonorId={page === 'pickups'  ? pickupInitDonorId  : undefined}
+            initialPickupId={page === 'pickups' ? pickupInitPickupId : undefined}
             onDonorApplied={() => setPickupInitDonorId(null)}
+            onPickupApplied={() => setPickupInitPickupId(null)}
           />
         ) : (
           <AccessDenied onBack={() => navigate(DEFAULT_PAGE[role] || 'pickups')} />

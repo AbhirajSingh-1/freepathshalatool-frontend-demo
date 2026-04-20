@@ -1,4 +1,7 @@
-// Frontend/src/pages/Pickups.jsx — Fixed: uses kabadiwalas as partners
+// Frontend/src/pages/Pickups.jsx
+// FIX: When navigated from TodayPickups with a pickupId, we call recordPickup()
+//      on the existing scheduled entry instead of createPickup() — this moves
+//      the card from Pending → Completed without creating a duplicate record.
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   Search, Plus, X, CheckSquare, Square,
@@ -95,16 +98,14 @@ function DonorSearch({ donors, selectedId, onSelect, onAddNew }) {
   )
 }
 
-// ─── Pickup Partner dropdown — FIXED sector matching ──────────────────────────
+// ─── Pickup Partner dropdown ───────────────────────────────────────────────────
 function PartnerSearch({ partners, donorSector, value, onChange }) {
   const [query, setQuery] = useState('')
   const [open, setOpen]   = useState(false)
   const rootRef = useRef(null)
-  // FIX: partners comes from kabadiwalas — handle undefined/null safely
   const safePartners = useMemo(() => Array.isArray(partners) ? partners : [], [partners])
   const selected = useMemo(() => safePartners.find(k => k.name === value), [safePartners, value])
 
-  // FIX: Correct sector matching
   const { recommended, others } = useMemo(() => {
     if (!donorSector) return { recommended: [], others: safePartners }
     const rec = safePartners.filter(p => {
@@ -490,15 +491,25 @@ function DonorPickupHistory({ donor, pickups }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-export default function Pickups({ initialDonorId, onDonorApplied }) {
-  // FIX: Use kabadiwalas (aliased as partners in AppContext) — both work now
-  const { donors, kabadiwalas: partners, pickups, addDonor, createPickup } = useApp()
+export default function Pickups({
+  initialDonorId,
+  onDonorApplied,
+  initialPickupId,   // ← NEW: ID of an existing scheduled pickup to record
+  onPickupApplied,   // ← NEW: callback after applying
+}) {
+  const {
+    donors, kabadiwalas: partners, pickups,
+    addDonor, createPickup, recordPickup,
+  } = useApp()
 
   const [form,       setForm]       = useState({ ...EMPTY_FORM })
   const [saving,     setSaving]     = useState(false)
   const [errors,     setErrors]     = useState({})
   const [toast,      setToast]      = useState(null)
   const [donorModal, setDonorModal] = useState(false)
+
+  // Indicates whether we are updating an existing scheduled pickup
+  const [targetPickupId, setTargetPickupId] = useState(null)
 
   const activeDonors  = useMemo(() => (donors || []).filter(d => d.status !== 'Lost'), [donors])
   const selectedDonor = useMemo(() => activeDonors.find(d => d.id === form.donorId) || null, [activeDonors, form.donorId])
@@ -536,13 +547,34 @@ export default function Pickups({ initialDonorId, onDonorApplied }) {
     }
   }, [rstEstimatedValue])
 
-  // Auto-select donor when arriving from TodayPickups "Record Pickup" button
+  // ── Apply pre-selected donor (from TodayPickups or elsewhere) ──────────────
   useEffect(() => {
     if (initialDonorId) {
       setForm(f => ({ ...f, donorId: initialDonorId }))
       onDonorApplied?.()
     }
   }, [initialDonorId]) // eslint-disable-line
+
+  // ── Apply pre-selected existing pickup (from TodayPickups "Record Pickup") ─
+  useEffect(() => {
+    if (!initialPickupId) return
+    const existing = pickups.find(p => p.id === initialPickupId)
+    if (existing) {
+      setTargetPickupId(initialPickupId)
+      // Pre-fill donor so the form & sidebar history is visible immediately
+      setForm(f => ({
+        ...f,
+        donorId:    existing.donorId    || f.donorId,
+        pickupMode: existing.pickupMode || f.pickupMode,
+        kabadiwala: existing.kabadiwala || '',
+        kabadiMobile: existing.kabadiMobile || '',
+        rstItems:   existing.rstItems   || [],
+        sksItems:   existing.sksItems   || [],
+        notes:      existing.notes      || '',
+      }))
+    }
+    onPickupApplied?.()
+  }, [initialPickupId]) // eslint-disable-line
 
   const set = useCallback((key, val) => {
     setForm(f => {
@@ -602,11 +634,10 @@ export default function Pickups({ initialDonorId, onDonorApplied }) {
       const finalSKS      = form.sksItems.map(i => i === 'Others' && form.sksOtherText?.trim() ? `Others (${form.sksOtherText.trim()})` : i)
       const type          = finalRST.length > 0 && finalSKS.length > 0 ? 'RST+SKS' : finalSKS.length > 0 ? 'SKS' : 'RST'
       const paymentStatus = form.paymentStatus === 'Write Off' ? 'Write Off' : derivePayStatus(totalValue, amountPaid)
-      const orderId       = generateOrderId()
       const combinedKg    = rstTotalWeight + rstOthersWeight
 
-      await createPickup({
-        orderId, donorId: donor.id, donorName: donor.name,
+      const pickupData = {
+        donorId: donor.id, donorName: donor.name,
         mobile: donor.mobile || '', society: donor.society || '',
         sector: donor.sector || '', city: donor.city || '',
         date: todayStr(), pickupMode: form.pickupMode, status: 'Completed', type,
@@ -617,10 +648,24 @@ export default function Pickups({ initialDonorId, onDonorApplied }) {
         totalValue, amountPaid, paymentStatus,
         kabadiwala: form.kabadiwala || '', kabadiMobile: form.kabadiMobile || '',
         notes: form.notes,
-      })
+      }
+
+      let savedId
+      if (targetPickupId) {
+        // ── UPDATE existing scheduled pickup (prevents duplicate in TodayPickups) ──
+        await recordPickup(targetPickupId, pickupData)
+        savedId = targetPickupId
+        setTargetPickupId(null)
+      } else {
+        // ── CREATE new pickup (manual entry from Pickups page) ──
+        const orderId = generateOrderId()
+        const created = await createPickup({ orderId, ...pickupData })
+        savedId = created?.orderId || orderId
+      }
+
       setForm({ ...EMPTY_FORM })
       setErrors({})
-      setToast(`Pickup recorded! Order ID: ${orderId}`)
+      setToast(`Pickup recorded! Order: ${savedId}`)
     } catch (err) {
       console.error('Save error:', err)
       setErrors({ general: 'Failed to save pickup. Please try again.' })
@@ -633,16 +678,26 @@ export default function Pickups({ initialDonorId, onDonorApplied }) {
 
   return (
     <div className="page-body">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '12px 16px', background: 'var(--secondary-light)', borderRadius: 'var(--radius)', border: '1px solid rgba(27,94,53,0.15)' }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Header context banner */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '12px 16px', background: targetPickupId ? 'var(--info-bg)' : 'var(--secondary-light)', borderRadius: 'var(--radius)', border: `1px solid ${targetPickupId ? 'rgba(59,130,246,0.2)' : 'rgba(27,94,53,0.15)'}` }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: targetPickupId ? 'var(--info)' : 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Truck size={18} color="white" />
         </div>
         <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--secondary)' }}>Record a Pickup</div>
-          <div style={{ fontSize: 12, color: 'var(--secondary)', opacity: 0.7 }}>
-            Field staff use only · Pickup date: <strong>{todayStr()}</strong> (today)
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: targetPickupId ? 'var(--info)' : 'var(--secondary)' }}>
+            {targetPickupId ? `Updating Scheduled Pickup · ${targetPickupId}` : 'Record a Pickup'}
+          </div>
+          <div style={{ fontSize: 12, color: targetPickupId ? 'var(--info)' : 'var(--secondary)', opacity: 0.7 }}>
+            {targetPickupId
+              ? 'This will mark the scheduled pickup as Completed.'
+              : `Field staff use only · Pickup date: ${todayStr()} (today)`}
           </div>
         </div>
+        {targetPickupId && (
+          <button type="button" onClick={() => { setTargetPickupId(null); setForm({ ...EMPTY_FORM }) }} style={{ marginLeft: 'auto', border: '1px solid var(--info)', background: 'transparent', borderRadius: 8, padding: '4px 10px', fontSize: 12, color: 'var(--info)', cursor: 'pointer', fontWeight: 600 }}>
+            × Clear
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.1fr) minmax(0,0.9fr)', gap: 20, alignItems: 'start' }} className="two-col-form">
@@ -689,7 +744,7 @@ export default function Pickups({ initialDonorId, onDonorApplied }) {
               </div>
             </div>
 
-            {/* 3. Pickup Partner — now with fixed sector matching */}
+            {/* 3. Pickup Partner */}
             <div className="form-group" style={{ margin: 0 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <UserCheck size={13} color="var(--secondary)" />
@@ -771,11 +826,11 @@ export default function Pickups({ initialDonorId, onDonorApplied }) {
             </div>
 
             <button className="btn btn-primary" onClick={handleSave} disabled={saving} style={{ width: '100%', justifyContent: 'center', padding: '11px', fontSize: 14, fontWeight: 700 }}>
-              {saving ? <><span className="spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: 'white', borderRadius: '50%' }} /> Saving…</> : <><CheckCircle size={16} /> Save Pickup Record</>}
+              {saving ? <><span className="spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: 'white', borderRadius: '50%' }} /> Saving…</> : <><CheckCircle size={16} /> {targetPickupId ? 'Complete Scheduled Pickup' : 'Save Pickup Record'}</>}
             </button>
 
             {formDirty && (
-              <button type="button" onClick={() => { setForm({ ...EMPTY_FORM }); setErrors({}) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, color: 'var(--text-muted)', textAlign: 'center', width: '100%', padding: 4, textDecoration: 'underline' }}>
+              <button type="button" onClick={() => { setForm({ ...EMPTY_FORM }); setErrors({}); setTargetPickupId(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12.5, color: 'var(--text-muted)', textAlign: 'center', width: '100%', padding: 4, textDecoration: 'underline' }}>
                 Clear form
               </button>
             )}

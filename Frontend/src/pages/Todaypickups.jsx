@@ -1,5 +1,7 @@
 // Frontend/src/pages/TodayPickups.jsx
-// Tabs: Pending / Completed — real-time via AppContext
+// Tabs: Pending / Completed / Others — real-time via AppContext
+// FIX: handleRecord now passes pickupId so Pickups page calls recordPickup()
+//      on the existing scheduled entry instead of creating a duplicate.
 import { useMemo, useState } from 'react'
 import {
   Calendar, Truck, CheckCircle, Clock,
@@ -232,7 +234,16 @@ export default function TodayPickups({ onNav }) {
   const completed = useMemo(() => todayPickups.filter(p => p.status === 'Completed'), [todayPickups])
   const others    = useMemo(() => todayPickups.filter(p => p.status !== 'Pending' && p.status !== 'Completed'), [todayPickups])
 
-  const handleRecord = (pickup) => onNav('pickups', { donorId: pickup.donorId })
+  /**
+   * FIX: Pass both donorId AND pickupId to the Pickups page.
+   * Pickups.jsx will detect initialPickupId and call recordPickup() on the
+   * existing scheduled entry instead of createPickup() — preventing duplicates
+   * and correctly moving the card from Pending → Completed.
+   */
+  const handleRecord = (pickup) => onNav('pickups', {
+    donorId:  pickup.donorId,
+    pickupId: pickup.id,
+  })
 
   const todayFormatted = new Date().toLocaleDateString('en-IN', {
     weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
@@ -358,8 +369,8 @@ export default function TodayPickups({ onNav }) {
           <h3>No Pickups Scheduled Today</h3>
           <p>
             {canSchedule
-              ? 'No pickups are assigned for today. Use the Pickup Scheduler to plan today\'s collection.'
-              : 'No pickups are assigned for today. Your manager will schedule pickups and they will appear here.'}
+              ? "No pickups are assigned for today. Use the Pickup Scheduler to plan today's collection."
+              : "No pickups are assigned for today. Your manager will schedule pickups and they will appear here."}
           </p>
           {canSchedule && (
             <button className="btn btn-outline btn-sm" style={{ marginTop: 16 }} onClick={() => onNav('pickupscheduler')}>

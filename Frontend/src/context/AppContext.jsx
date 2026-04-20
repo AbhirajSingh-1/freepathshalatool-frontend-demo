@@ -11,9 +11,6 @@ import {
   kabadiwalas as _initKabs,
 } from '../data/mockData'
 
-// NOTE: raddiMasterData (temp.js) intentionally NOT used as initial state.
-// raddiRecords are derived from completed pickups to avoid duplicates.
-
 const AppContext = createContext(null)
 
 export function useApp() {
@@ -86,7 +83,6 @@ function buildRaddiRow({ pickup, donor = {}, kabObj = {}, data = {} }) {
   }
 }
 
-// Derive initial raddi records from completed pickups — avoids seed-data divergence
 function initRaddiFromPickups(pickups, donors, kabs) {
   return pickups
     .filter(p => p.status === 'Completed')
@@ -169,7 +165,6 @@ export function AppProvider({ children }) {
           const donor  = prevD.find(d => d.id === pickup.donorId) || {}
           const kabObj = prevK.find(k => k.name === pickup.kabadiwala) || {}
           setRaddi(prev => {
-            // Check for existing record with same orderId to avoid duplicates
             const exists = prev.some(r => r.orderId === pickup.orderId || r.pickupId === pickup.id)
             if (exists) return prev.map(r =>
               (r.orderId === pickup.orderId || r.pickupId === pickup.id)
@@ -343,7 +338,14 @@ export function AppProvider({ children }) {
     setKabs(prev => prev.filter(k => k.id !== id))
   }, [])
 
-  const recordKabadiwalaPayment = useCallback(async (kabId, { pickupId, amount, refMode, refValue, notes, date }) => {
+  /**
+   * recordKabadiwalaPayment
+   * Records a payment for a specific pickup and syncs kabadiwala totals + raddi.
+   * Includes optional screenshot support for UPI payments.
+   */
+  const recordKabadiwalaPayment = useCallback(async (kabId, {
+    pickupId, amount, refMode, refValue, notes, date, screenshot,
+  }) => {
     await delay()
     const additional = Number(amount) || 0
     setKabs(prev => prev.map(k => {
@@ -364,17 +366,102 @@ export function AppProvider({ children }) {
         if (p.id !== pickupId) return p
         const np     = (p.amountPaid || 0) + additional
         const status = derivePaymentStatus(p.totalValue, np)
-        return { ...p, amountPaid: np, paymentStatus: status, payHistory: [...(p.payHistory || []), { date: date || today(), amount: additional, refMode, refValue, notes: notes || '' }] }
+        return {
+          ...p,
+          amountPaid: np,
+          paymentStatus: status,
+          payHistory: [...(p.payHistory || []), {
+            date: date || today(),
+            amount: additional,
+            cumulative: np,
+            refMode,
+            refValue,
+            notes: notes || '',
+            screenshot: screenshot || null,
+          }],
+        }
       }))
-      // sync raddiRecords
       setRaddi(prev => prev.map(r => {
         if (r.pickupId !== pickupId && r.orderId !== pickupId) return r
-        const np = (r.amountPaid || 0) + additional
+        const np      = (r.amountPaid || 0) + additional
         const newTotal = r.totalAmount || 0
-        const raddiPS = np >= newTotal ? 'Received' : 'Yet to Receive'
+        const raddiPS  = np >= newTotal ? 'Received' : 'Yet to Receive'
         return { ...r, amountPaid: np, paymentStatus: raddiPS }
       }))
     }
+  }, [])
+
+  /**
+   * clearPartnerBalance
+   * Bulk-clears ALL outstanding dues for a pickup partner in a single action.
+   * Syncs pickups, kabadiwala totals, and raddi records globally.
+   */
+  const clearPartnerBalance = useCallback(async ({ kabId, kabName }, paymentInfo) => {
+    await delay()
+    const {
+      refMode   = 'cash',
+      refValue  = '',
+      notes     = '',
+      date:  payDate,
+      screenshot = null,
+    } = paymentInfo || {}
+    const payD = payDate || today()
+
+    setPickups(prevPickups => {
+      // Compute total we are clearing
+      const totalClearing = prevPickups
+        .filter(p =>
+          p.kabadiwala === kabName &&
+          (p.paymentStatus === 'Not Paid' || p.paymentStatus === 'Partially Paid') &&
+          (p.totalValue || 0) > 0
+        )
+        .reduce((s, p) => s + Math.max(0, (p.totalValue || 0) - (p.amountPaid || 0)), 0)
+
+      // Sync kabadiwala totals
+      setKabs(prevKabs => prevKabs.map(k => {
+        if (k.id !== kabId) return k
+        return {
+          ...k,
+          amountReceived: (k.amountReceived || 0) + totalClearing,
+          pendingAmount:  0,
+          transactions:   (k.transactions || []).map(tx => ({
+            ...tx,
+            paid:   tx.value || 0,
+            status: 'Paid',
+          })),
+        }
+      }))
+
+      // Sync raddi records
+      setRaddi(prevRaddi => prevRaddi.map(r => {
+        if (r.kabadiwalaName !== kabName) return r
+        if (r.paymentStatus === 'Received' || r.paymentStatus === 'Write-off') return r
+        return { ...r, amountPaid: r.totalAmount || 0, paymentStatus: 'Received' }
+      }))
+
+      // Update all pending/partial pickups for this partner
+      return prevPickups.map(p => {
+        if (p.kabadiwala !== kabName) return p
+        if (p.paymentStatus === 'Paid' || p.paymentStatus === 'Write Off') return p
+        const rem = Math.max(0, (p.totalValue || 0) - (p.amountPaid || 0))
+        if (rem <= 0) return p
+        const newPaid = (p.amountPaid || 0) + rem
+        return {
+          ...p,
+          amountPaid:    newPaid,
+          paymentStatus: 'Paid',
+          payHistory: [...(p.payHistory || []), {
+            date:        payD,
+            amount:      rem,
+            cumulative:  newPaid,
+            refMode,
+            refValue,
+            notes,
+            screenshot,
+          }],
+        }
+      })
+    })
   }, [])
 
   // ── Derived: PickupScheduler tab data ────────────────────────────────────
@@ -447,7 +534,8 @@ export function AppProvider({ children }) {
     dashboardStats, schedulerTabData,
     addDonor, updateDonor, deleteDonor,
     createPickup, schedulePickup, recordPickup, updatePickup, deletePickup,
-    addKabadiwala, updateKabadiwala, deleteKabadiwala, recordKabadiwalaPayment,
+    addKabadiwala, updateKabadiwala, deleteKabadiwala,
+    recordKabadiwalaPayment, clearPartnerBalance,
     addPartner:    addKabadiwala,
     updatePartner: updateKabadiwala,
     deletePartner: deleteKabadiwala,
@@ -455,7 +543,8 @@ export function AppProvider({ children }) {
     donors, pickups, kabadiwalas, raddiRecords, dashboardStats, schedulerTabData,
     addDonor, updateDonor, deleteDonor,
     createPickup, schedulePickup, recordPickup, updatePickup, deletePickup,
-    addKabadiwala, updateKabadiwala, deleteKabadiwala, recordKabadiwalaPayment,
+    addKabadiwala, updateKabadiwala, deleteKabadiwala,
+    recordKabadiwalaPayment, clearPartnerBalance,
   ])
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
