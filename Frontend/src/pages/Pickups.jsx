@@ -1,7 +1,9 @@
 // Frontend/src/pages/Pickups.jsx
-// FIX: When navigated from TodayPickups with a pickupId, we call recordPickup()
-//      on the existing scheduled entry instead of createPickup() — this moves
-//      the card from Pending → Completed without creating a duplicate record.
+// FIX 1: When navigated from TodayPickups with a pickupId, we call recordPickup()
+//         on the existing scheduled entry instead of createPickup() — prevents duplicate.
+// FIX 2: When a donor is selected MANUALLY on this page, the system auto-detects
+//         any pending pickup scheduled for today for that donor and links it,
+//         so completing it here also removes it from TodayPickups. UNIFIED flow.
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
 import {
   Search, Plus, X, CheckSquare, Square,
@@ -494,8 +496,8 @@ function DonorPickupHistory({ donor, pickups }) {
 export default function Pickups({
   initialDonorId,
   onDonorApplied,
-  initialPickupId,   // ← NEW: ID of an existing scheduled pickup to record
-  onPickupApplied,   // ← NEW: callback after applying
+  initialPickupId,   // ID of an existing scheduled pickup to record (from TodayPickups nav)
+  onPickupApplied,   // callback after applying
 }) {
   const {
     donors, kabadiwalas: partners, pickups,
@@ -510,6 +512,10 @@ export default function Pickups({
 
   // Indicates whether we are updating an existing scheduled pickup
   const [targetPickupId, setTargetPickupId] = useState(null)
+
+  // Track whether targetPickupId originated from navigation (prop) so the
+  // auto-detect effect doesn't fight it.
+  const navLinkedRef = useRef(false)
 
   const activeDonors  = useMemo(() => (donors || []).filter(d => d.status !== 'Lost'), [donors])
   const selectedDonor = useMemo(() => activeDonors.find(d => d.id === form.donorId) || null, [activeDonors, form.donorId])
@@ -560,21 +566,61 @@ export default function Pickups({
     if (!initialPickupId) return
     const existing = pickups.find(p => p.id === initialPickupId)
     if (existing) {
+      navLinkedRef.current = true          // mark as nav-originated
       setTargetPickupId(initialPickupId)
-      // Pre-fill donor so the form & sidebar history is visible immediately
       setForm(f => ({
         ...f,
-        donorId:    existing.donorId    || f.donorId,
-        pickupMode: existing.pickupMode || f.pickupMode,
-        kabadiwala: existing.kabadiwala || '',
+        donorId:      existing.donorId      || f.donorId,
+        pickupMode:   existing.pickupMode   || f.pickupMode,
+        kabadiwala:   existing.kabadiwala   || '',
         kabadiMobile: existing.kabadiMobile || '',
-        rstItems:   existing.rstItems   || [],
-        sksItems:   existing.sksItems   || [],
-        notes:      existing.notes      || '',
+        rstItems:     existing.rstItems     || [],
+        sksItems:     existing.sksItems     || [],
+        notes:        existing.notes        || '',
       }))
     }
     onPickupApplied?.()
   }, [initialPickupId]) // eslint-disable-line
+
+  // ── AUTO-DETECT: link today's pending pickup when donor is selected manually ─
+  // This is the core sync fix: ensures the Pickup Page and TodayPickups page
+  // both trigger the same completion path regardless of which was used.
+  useEffect(() => {
+    // Skip if this change was triggered by the navigation prop above
+    if (navLinkedRef.current) {
+      navLinkedRef.current = false
+      return
+    }
+
+    if (!form.donorId) {
+      // Donor was cleared — reset link (only if not nav-originated)
+      setTargetPickupId(null)
+      return
+    }
+
+    // Find a pending pickup scheduled for today for this donor
+    const todayLinked = pickups.find(p =>
+      p.donorId === form.donorId &&
+      p.date === todayStr() &&
+      p.status === 'Pending'
+    )
+
+    if (todayLinked) {
+      setTargetPickupId(todayLinked.id)
+      // Pre-fill form fields from the scheduled pickup (don't overwrite already-set items)
+      setForm(f => ({
+        ...f,
+        pickupMode:   todayLinked.pickupMode   || f.pickupMode,
+        kabadiwala:   todayLinked.kabadiwala   || f.kabadiwala,
+        kabadiMobile: todayLinked.kabadiMobile || f.kabadiMobile,
+        rstItems:     todayLinked.rstItems?.length ? todayLinked.rstItems : f.rstItems,
+        sksItems:     todayLinked.sksItems?.length ? todayLinked.sksItems : f.sksItems,
+        notes:        todayLinked.notes || f.notes,
+      }))
+    } else {
+      setTargetPickupId(null)
+    }
+  }, [form.donorId]) // eslint-disable-line
 
   const set = useCallback((key, val) => {
     setForm(f => {
@@ -652,12 +698,13 @@ export default function Pickups({
 
       let savedId
       if (targetPickupId) {
-        // ── UPDATE existing scheduled pickup (prevents duplicate in TodayPickups) ──
+        // ── UPDATE existing scheduled pickup — unified completion path ──
+        // This handles BOTH nav-from-TodayPickups AND manual-donor-selection cases.
         await recordPickup(targetPickupId, pickupData)
         savedId = targetPickupId
         setTargetPickupId(null)
       } else {
-        // ── CREATE new pickup (manual entry from Pickups page) ──
+        // ── CREATE new pickup (no existing scheduled entry found) ──
         const orderId = generateOrderId()
         const created = await createPickup({ orderId, ...pickupData })
         savedId = created?.orderId || orderId
@@ -676,25 +723,39 @@ export default function Pickups({
   const remaining = Math.max(0, (Number(form.totalValue) || 0) - (Number(form.amountPaid) || 0))
   const formDirty = form.donorId || form.rstItems.length > 0 || form.sksItems.length > 0 || form.totalValue
 
+  // ── Banner state: nav link, auto-link, or fresh entry ─────────────────────
+  const bannerIsNav    = !!targetPickupId && !!initialPickupId
+  const bannerIsAuto   = !!targetPickupId && !initialPickupId
+  const bannerColor    = bannerIsNav ? 'var(--info)' : bannerIsAuto ? 'var(--warning)' : 'var(--secondary)'
+  const bannerBg       = bannerIsNav ? 'var(--info-bg)' : bannerIsAuto ? 'var(--warning-bg)' : 'var(--secondary-light)'
+  const bannerBorder   = bannerIsNav ? 'rgba(59,130,246,0.2)' : bannerIsAuto ? 'rgba(245,158,11,0.25)' : 'rgba(27,94,53,0.15)'
+  const bannerTitle    = targetPickupId
+    ? bannerIsNav
+      ? `Updating Scheduled Pickup · ${targetPickupId}`
+      : `Auto-linked Today's Pickup · ${targetPickupId}`
+    : 'Record a Pickup'
+  const bannerSub      = targetPickupId
+    ? 'Saving will mark this scheduled pickup as Completed and remove it from Today\'s Pickups.'
+    : `Field staff use only · Pickup date: ${todayStr()} (today)`
+
   return (
     <div className="page-body">
       {/* Header context banner */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '12px 16px', background: targetPickupId ? 'var(--info-bg)' : 'var(--secondary-light)', borderRadius: 'var(--radius)', border: `1px solid ${targetPickupId ? 'rgba(59,130,246,0.2)' : 'rgba(27,94,53,0.15)'}` }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: targetPickupId ? 'var(--info)' : 'var(--secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, padding: '12px 16px', background: bannerBg, borderRadius: 'var(--radius)', border: `1px solid ${bannerBorder}` }}>
+        <div style={{ width: 36, height: 36, borderRadius: 10, flexShrink: 0, background: bannerColor, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Truck size={18} color="white" />
         </div>
         <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: targetPickupId ? 'var(--info)' : 'var(--secondary)' }}>
-            {targetPickupId ? `Updating Scheduled Pickup · ${targetPickupId}` : 'Record a Pickup'}
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: bannerColor }}>
+            {bannerTitle}
           </div>
-          <div style={{ fontSize: 12, color: targetPickupId ? 'var(--info)' : 'var(--secondary)', opacity: 0.7 }}>
-            {targetPickupId
-              ? 'This will mark the scheduled pickup as Completed.'
-              : `Field staff use only · Pickup date: ${todayStr()} (today)`}
+          <div style={{ fontSize: 12, color: bannerColor, opacity: 0.75 }}>
+            {bannerSub}
           </div>
         </div>
         {targetPickupId && (
-          <button type="button" onClick={() => { setTargetPickupId(null); setForm({ ...EMPTY_FORM }) }} style={{ marginLeft: 'auto', border: '1px solid var(--info)', background: 'transparent', borderRadius: 8, padding: '4px 10px', fontSize: 12, color: 'var(--info)', cursor: 'pointer', fontWeight: 600 }}>
+          <button type="button" onClick={() => { setTargetPickupId(null); setForm({ ...EMPTY_FORM }); setErrors({}) }}
+            style={{ marginLeft: 'auto', border: `1px solid ${bannerColor}`, background: 'transparent', borderRadius: 8, padding: '4px 10px', fontSize: 12, color: bannerColor, cursor: 'pointer', fontWeight: 600 }}>
             × Clear
           </button>
         )}
@@ -847,12 +908,13 @@ export default function Pickups({
             <div className="card-body" style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.8, padding: '12px 16px' }}>
               {[
                 ['1.', 'Search or add a donor.'],
-                ['2.', 'Pickup date is locked to today.'],
-                ['3.', 'Assign a partner — sector-matched partners shown first.'],
-                ['4.', 'Tick RST items, fill weights. "Others" supports multiple entries.'],
-                ['5.', 'Total Value auto-fills from rates × weights.'],
-                ['6.', 'Tick SKS items (checkbox only).'],
-                ['7.', 'Set payment details and hit Save.'],
+                ['2.', 'If the donor has a pickup scheduled today, it auto-links. ✓'],
+                ['3.', 'Pickup date is locked to today.'],
+                ['4.', 'Assign a partner — sector-matched shown first.'],
+                ['5.', 'Tick RST items and fill weights. "Others" supports multiple entries.'],
+                ['6.', 'Total Value auto-fills from rates × weights.'],
+                ['7.', 'Tick SKS items (checkbox only).'],
+                ['8.', 'Set payment details and hit Save.'],
               ].map(([n, t]) => (
                 <div key={n} style={{ display: 'flex', gap: 10, marginBottom: 4 }}>
                   <span style={{ fontWeight: 700, color: 'var(--primary)', flexShrink: 0 }}>{n}</span>

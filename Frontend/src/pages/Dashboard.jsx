@@ -314,7 +314,7 @@ export default function Dashboard({ onNav }) {
       {/* Quick nav cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
         {[
-          { label: 'Schedule Pickups',   sub: 'Plan upcoming pickups',            page: 'pickupscheduler', color: 'var(--info)',       bg: 'var(--info-bg)' },
+          { label: 'Pickup Scheduler',   sub: 'Plan upcoming pickups',            page: 'pickupscheduler', color: 'var(--info)',       bg: 'var(--info-bg)' },
           { label: 'Payment Tracking',   sub: `${dashboardStats.pendingPayments} pending`,  page: 'payments',  color: 'var(--warning)',   bg: 'var(--warning-bg)' },
           { label: 'SKS Warehouse',      sub: 'Track donated goods',              page: 'sksoverview',     color: 'var(--primary)',    bg: 'var(--primary-light)' },
         ].map(card => (

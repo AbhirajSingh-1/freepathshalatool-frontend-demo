@@ -1,16 +1,18 @@
 // Frontend/src/pages/Supporters.jsx
-// Dedicated Supporters Management Page
-// Status is calculated independently from lastSupportDate (NOT pickup dates)
-// Shows: donorType === 'supporter' | 'both'
+// Simplified Supporters Management Page
+// • Status is auto-calculated from Date (no manual edit)
+// • Stat cards are clickable to filter by status
+// • Contribution is free-text input (no dropdown)
+// • Date field simplified label
 import { useState, useMemo } from 'react'
 import {
-  Heart, ThumbsUp, Search, Plus, Edit2, Trash2, X,
+  Heart, Search, Plus, Edit2, Trash2, X,
   Phone, MapPin, Clock, CheckCircle, AlertCircle,
   UserX, Download, Users, Calendar, SlidersHorizontal,
   ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { fmtDate, fmtCurrency, exportToExcel } from '../utils/helpers'
+import { fmtDate, exportToExcel } from '../utils/helpers'
 import { CITIES, CITY_SECTORS } from '../data/mockData'
 import { differenceInDays, parseISO } from 'date-fns'
 import SocietyInput from '../components/SocietyInput'
@@ -25,16 +27,11 @@ function getSupporterStatus(lastSupportDate) {
 }
 
 const STATUS_CONFIG = {
-  'New':      { color: 'var(--info)',      bg: 'var(--info-bg)',         icon: Users,         label: 'New' },
-  'Active':   { color: 'var(--secondary)', bg: 'var(--secondary-light)', icon: CheckCircle,   label: 'Active' },
-  'At Risk':  { color: 'var(--warning)',   bg: 'var(--warning-bg)',      icon: AlertCircle,   label: 'At Risk' },
-  'Inactive': { color: 'var(--danger)',    bg: 'var(--danger-bg)',       icon: UserX,         label: 'Inactive' },
+  'New':      { color: 'var(--info)',      bg: 'var(--info-bg)',         icon: Users,       label: 'New' },
+  'Active':   { color: 'var(--secondary)', bg: 'var(--secondary-light)', icon: CheckCircle, label: 'Active' },
+  'At Risk':  { color: 'var(--warning)',   bg: 'var(--warning-bg)',      icon: AlertCircle, label: 'At Risk' },
+  'Inactive': { color: 'var(--danger)',    bg: 'var(--danger-bg)',       icon: UserX,       label: 'Inactive' },
 }
-
-const CONTRIBUTION_TYPES = [
-  'Money', 'Clothes', 'Books', 'Stationery', 'Food Items',
-  'Toys', 'Electronics', 'Furniture', 'Medical Supplies', 'Other',
-]
 
 const EMPTY_FORM = {
   name: '', mobile: '', house: '', city: 'Gurgaon', sector: '', society: '',
@@ -74,18 +71,42 @@ function StatusBadge({ status }) {
   )
 }
 
+// ── Clickable KPI stat card ───────────────────────────────────────────────────
+function KpiCard({ tone, icon: Icon, value, label, sub, isActive, onClick }) {
+  return (
+    <div
+      className={`stat-card ${tone}`}
+      onClick={onClick}
+      style={{
+        cursor: 'pointer',
+        outline: isActive ? '3px solid currentColor' : 'none',
+        outlineOffset: 2,
+        transition: 'all 0.15s',
+        transform: isActive ? 'translateY(-2px)' : 'none',
+        boxShadow: isActive ? 'var(--shadow-md)' : 'var(--shadow)',
+      }}
+      title={isActive ? 'Click to clear filter' : `Click to filter by ${label}`}
+    >
+      <div className="stat-icon"><Icon size={18} /></div>
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+      {sub && <div className="stat-change up">{sub}</div>}
+    </div>
+  )
+}
+
 export default function Supporters() {
   const { donors, addDonor, updateDonor, deleteDonor } = useApp()
 
-  const [modal,    setModal]    = useState(false)
-  const [editing,  setEditing]  = useState(null)
-  const [form,     setForm]     = useState(EMPTY_FORM)
-  const [saving,   setSaving]   = useState(false)
-  const [errors,   setErrors]   = useState({})
-  const [expanded, setExpanded] = useState({})
+  const [modal,        setModal]        = useState(false)
+  const [editing,      setEditing]      = useState(null)
+  const [form,         setForm]         = useState(EMPTY_FORM)
+  const [saving,       setSaving]       = useState(false)
+  const [errors,       setErrors]       = useState({})
+  const [expanded,     setExpanded]     = useState({})
 
   const [search,       setSearch]       = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')   // driven by KPI card clicks
   const [filterType,   setFilterType]   = useState('all')
   const [filterCity,   setFilterCity]   = useState('')
   const [filterSector, setFilterSector] = useState('')
@@ -132,6 +153,11 @@ export default function Supporters() {
 
   const hasFilters = filterCity || filterSector || filterType !== 'all'
 
+  // ── KPI card click → toggle filter ───────────────────────────────────────
+  const handleKpiClick = (status) => {
+    setFilterStatus(prev => prev === status ? 'all' : status)
+  }
+
   // ── Modal helpers ─────────────────────────────────────────────────────────
   const openModal = (s = null) => {
     setEditing(s)
@@ -176,7 +202,7 @@ export default function Supporters() {
     try {
       const payload = {
         ...form,
-        donorType:          form.isAlsoDonor ? 'both' : 'supporter',
+        donorType:           form.isAlsoDonor ? 'both' : 'supporter',
         supportContribution: form.contributionType,
       }
       delete payload.isAlsoDonor
@@ -198,8 +224,8 @@ export default function Supporters() {
       'Name':              d.name,
       'Mobile':            d.mobile || '—',
       'Role':              d.donorType === 'both' ? 'Donor + Supporter' : 'Supporter',
-      'Contribution Type': d.effectiveContrib || '—',
-      'Last Support Date': d.lastSupportDate ? fmtDate(d.lastSupportDate) : '—',
+      'Contribution':      d.effectiveContrib || '—',
+      'Date':              d.lastSupportDate ? fmtDate(d.lastSupportDate) : '—',
       'Supporter Status':  d.supporterStatus,
       'City':              d.city || '—',
       'Sector':            d.sector || '—',
@@ -208,16 +234,11 @@ export default function Supporters() {
     })), 'Supporters_Export')
   }
 
-  const STATUS_TABS = [
-    { id: 'all',      label: 'All',           count: kpis.total },
-    { id: 'Active',   label: '✓ Active',       count: kpis['Active']   || 0 },
-    { id: 'At Risk',  label: '⚠ At Risk',      count: kpis['At Risk']  || 0 },
-    { id: 'Inactive', label: '✗ Inactive',     count: kpis['Inactive'] || 0 },
-    { id: 'New',      label: '✦ New',          count: kpis['New']      || 0 },
-  ]
-
   const previewStatus = form.lastSupportDate ? getSupporterStatus(form.lastSupportDate) : null
   const previewCfg    = previewStatus ? STATUS_CONFIG[previewStatus] : null
+
+  // ── Active filter label ───────────────────────────────────────────────────
+  const activeFilterCfg = filterStatus !== 'all' ? STATUS_CONFIG[filterStatus] : null
 
   // ────────────────────────────────────────────────────────────────────────
   return (
@@ -229,9 +250,10 @@ export default function Supporters() {
           <Heart size={20} color="white" />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--primary)' }}>Supporters & Contributors</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, color: 'var(--primary)' }}>Supporters &amp; Contributors</div>
           <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 2 }}>
-            People who support FreePathshala with money, goods, clothes, or other contributions
+            People who support FreePathshala with money, goods, clothes, or other contributions.
+            Status is automatic — Active (≤ 60d) · At Risk (61–120d) · Inactive (&gt; 120d)
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
@@ -239,52 +261,53 @@ export default function Supporters() {
             <Download size={13} /> Export ({filtered.length})
           </button>
           <button className="btn btn-primary btn-sm" onClick={() => openModal()}>
-            <Plus size={13} /> Add Supporter
+            <Plus size={13} /> Add New Supporter
           </button>
         </div>
       </div>
 
-      {/* ── KPI Cards ── */}
+      {/* ── Clickable KPI Cards — click to filter by status ── */}
       <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat-card orange">
-          <div className="stat-icon"><Heart size={18} /></div>
-          <div className="stat-value">{kpis.total}</div>
-          <div className="stat-label">Total Supporters</div>
-          <div className="stat-change up">{kpis.both} also RST/SKS donors</div>
-        </div>
-        <div className="stat-card green">
-          <div className="stat-icon"><CheckCircle size={18} /></div>
-          <div className="stat-value">{kpis['Active'] || 0}</div>
-          <div className="stat-label">Active (≤ 60 days)</div>
-        </div>
-        <div className="stat-card yellow">
-          <div className="stat-icon"><AlertCircle size={18} /></div>
-          <div className="stat-value">{kpis['At Risk'] || 0}</div>
-          <div className="stat-label">At Risk (61–120 days)</div>
-        </div>
-        <div className="stat-card red">
-          <div className="stat-icon"><UserX size={18} /></div>
-          <div className="stat-value">{kpis['Inactive'] || 0}</div>
-          <div className="stat-label">Inactive (&gt; 120 days)</div>
-        </div>
+        <KpiCard
+          tone="orange" icon={Heart}
+          value={kpis.total} label="Total Supporters"
+          sub={`${kpis.both} also RST/SKS donors`}
+          isActive={filterStatus === 'all' && false}  // "total" doesn't filter, just shows count
+          onClick={() => setFilterStatus('all')}
+        />
+        <KpiCard
+          tone="green" icon={CheckCircle}
+          value={kpis['Active'] || 0} label="Active (≤ 60 days)"
+          isActive={filterStatus === 'Active'}
+          onClick={() => handleKpiClick('Active')}
+        />
+        <KpiCard
+          tone="yellow" icon={AlertCircle}
+          value={kpis['At Risk'] || 0} label="At Risk (61–120 days)"
+          isActive={filterStatus === 'At Risk'}
+          onClick={() => handleKpiClick('At Risk')}
+        />
+        <KpiCard
+          tone="red" icon={UserX}
+          value={kpis['Inactive'] || 0} label="Inactive (> 120 days)"
+          isActive={filterStatus === 'Inactive'}
+          onClick={() => handleKpiClick('Inactive')}
+        />
       </div>
 
-      {/* ── Status tabs ── */}
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 16 }}>
-        {STATUS_TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setFilterStatus(tab.id)}
-            className={`btn btn-sm ${filterStatus === tab.id ? 'btn-primary' : 'btn-ghost'}`}
-            style={{ fontSize: 12.5 }}
-          >
-            {tab.label}
-            <span style={{ marginLeft: 5, background: filterStatus === tab.id ? 'rgba(255,255,255,0.3)' : 'var(--border)', color: filterStatus === tab.id ? 'white' : 'var(--text-muted)', borderRadius: 20, fontSize: 10.5, padding: '1px 7px', fontWeight: 700 }}>
-              {tab.count}
-            </span>
+      {/* ── Active status filter pill ── */}
+      {activeFilterCfg && (
+        <div style={{ marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderRadius: 10, background: activeFilterCfg.bg, border: `1px solid ${activeFilterCfg.color}33` }}>
+          <activeFilterCfg.icon size={14} color={activeFilterCfg.color} />
+          <span style={{ fontSize: 13, fontWeight: 700, color: activeFilterCfg.color }}>Filtering: {activeFilterCfg.label}</span>
+          <span style={{ fontSize: 12.5, color: activeFilterCfg.color, opacity: 0.8 }}>
+            — {kpis[filterStatus] || 0} supporter{(kpis[filterStatus] || 0) !== 1 ? 's' : ''}
+          </span>
+          <button onClick={() => setFilterStatus('all')} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: activeFilterCfg.color, display: 'flex', padding: 2 }}>
+            <X size={14} />
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* ── Search + filters ── */}
       <div style={{ marginBottom: 12 }}>
@@ -334,6 +357,7 @@ export default function Supporters() {
 
       <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12 }}>
         Showing <strong style={{ color: 'var(--text-primary)' }}>{filtered.length}</strong> of <strong>{supporters.length}</strong> supporters
+        {filterStatus !== 'all' && <span style={{ color: activeFilterCfg?.color, fontWeight: 600 }}> · {filterStatus}</span>}
       </div>
 
       {/* ── Empty state ── */}
@@ -343,7 +367,7 @@ export default function Supporters() {
             <Heart size={24} />
           </div>
           <h3>{supporters.length === 0 ? 'No Supporters Added Yet' : 'No Supporters Match'}</h3>
-          <p>{supporters.length === 0 ? 'Add your first supporter to get started tracking contributions.' : 'Try adjusting your search or filters.'}</p>
+          <p>{supporters.length === 0 ? 'Add your first supporter to get started.' : 'Try adjusting your search or filters.'}</p>
           {supporters.length === 0 && (
             <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={() => openModal()}>
               <Plus size={13} /> Add First Supporter
@@ -363,7 +387,7 @@ export default function Supporters() {
                   <th>Role</th>
                   <th>Mobile</th>
                   <th>Contribution</th>
-                  <th>Last Support</th>
+                  <th>Date</th>
                   <th>Status</th>
                   <th>Location</th>
                   <th>Actions</th>
@@ -371,9 +395,9 @@ export default function Supporters() {
               </thead>
               <tbody>
                 {filtered.map(d => {
-                  const cfg     = STATUS_CONFIG[d.supporterStatus] || STATUS_CONFIG['New']
-                  const isOpen  = !!expanded[d.id]
-                  const hasNote = !!d.notes?.trim()
+                  const cfg      = STATUS_CONFIG[d.supporterStatus] || STATUS_CONFIG['New']
+                  const isOpen   = !!expanded[d.id]
+                  const hasNote  = !!d.notes?.trim()
                   const daysDiff = d.lastSupportDate
                     ? differenceInDays(new Date(), parseISO(d.lastSupportDate))
                     : null
@@ -417,7 +441,10 @@ export default function Supporters() {
                           </>
                         ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not recorded</span>}
                       </td>
-                      <td><StatusBadge status={d.supporterStatus} /></td>
+                      <td>
+                        {/* Status is display-only, not editable */}
+                        <StatusBadge status={d.supporterStatus} />
+                      </td>
                       <td>
                         <div style={{ fontSize: 12.5 }}>
                           {d.society && <div style={{ fontWeight: 500 }}>{d.society}</div>}
@@ -454,7 +481,7 @@ export default function Supporters() {
           {/* ── Mobile cards ── */}
           <div className="mobile-cards">
             {filtered.map(d => {
-              const cfg     = STATUS_CONFIG[d.supporterStatus] || STATUS_CONFIG['New']
+              const cfg = STATUS_CONFIG[d.supporterStatus] || STATUS_CONFIG['New']
               return (
                 <div key={d.id} className="card" style={{ marginBottom: 10, padding: 14, borderLeft: `3px solid ${cfg.color}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -472,7 +499,6 @@ export default function Supporters() {
                     </div>
                     <StatusBadge status={d.supporterStatus} />
                   </div>
-
                   {d.effectiveContrib && (
                     <div style={{ fontSize: 12, color: '#991B1B', background: 'var(--danger-bg)', padding: '3px 10px', borderRadius: 20, marginBottom: 6, display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
                       <Heart size={9} fill="#991B1B" /> {d.effectiveContrib}
@@ -485,9 +511,7 @@ export default function Supporters() {
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      {d.lastSupportDate
-                        ? `Last support: ${fmtDate(d.lastSupportDate)}`
-                        : 'No support date recorded'}
+                      {d.lastSupportDate ? `${fmtDate(d.lastSupportDate)}` : 'No date recorded'}
                     </div>
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openModal(d)}><Edit2 size={12} /></button>
@@ -578,29 +602,34 @@ export default function Supporters() {
                     id="supporter-modal" />
                 </div>
 
-                {/* Contribution type */}
+                {/* Contribution — FREE TEXT (not dropdown) */}
                 <div className="form-group">
                   <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Heart size={12} color="var(--danger)" />
-                    Contribution Type
+                    Contribution
                   </label>
-                  <select value={form.contributionType} onChange={e => setField('contributionType', e.target.value)}>
-                    <option value="">Select contribution type…</option>
-                    {CONTRIBUTION_TYPES.map(t => <option key={t}>{t}</option>)}
-                  </select>
+                  <input
+                    value={form.contributionType}
+                    onChange={e => setField('contributionType', e.target.value)}
+                    placeholder="e.g. Money, Clothes, Books, Stationery…"
+                  />
                 </div>
 
-                {/* Last support date */}
+                {/* Date — single field, simplified label */}
                 <div className="form-group">
                   <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Calendar size={12} color="var(--info)" />
-                    Last Support Date
+                    Date
+                    <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 2 }}>
+                      (last support activity)
+                    </span>
                   </label>
                   <input type="date" value={form.lastSupportDate}
                     onChange={e => setField('lastSupportDate', e.target.value)} />
+                  {/* Auto status preview */}
                   {previewCfg && (
-                    <div style={{ fontSize: 11.5, marginTop: 4, display: 'flex', alignItems: 'center', gap: 5, color: previewCfg.color, fontWeight: 600 }}>
-                      Status preview: {previewStatus}
+                    <div style={{ fontSize: 11.5, marginTop: 5, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 20, background: previewCfg.bg, color: previewCfg.color, fontWeight: 700 }}>
+                      Auto status: {previewStatus}
                     </div>
                   )}
                 </div>
@@ -631,7 +660,7 @@ export default function Supporters() {
                       👍 Also an RST/SKS Donor
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>
-                      This person also donates raddi/goods. They will appear in the Donors page too.
+                      This person also donates raddi/goods. They'll appear in the Donors page too.
                     </div>
                   </div>
                   {form.isAlsoDonor && (
