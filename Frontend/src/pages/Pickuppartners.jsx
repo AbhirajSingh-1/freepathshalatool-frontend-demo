@@ -766,20 +766,22 @@ export default function PickupPartners() {
                 <PartnerPaymentSummaryCards partner={k} raddiRecords={raddiRecords||[]}/>
                 <RateChartMini rateChart={k.rateChart} expanded={!!expandedRates[k.id]} onToggle={() => toggleRate(k.id)}/>
 
-                {/* Status toggle button */}
-                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-                  <button
-                    onClick={() => togglePartnerStatus(k)}
-                    className={`btn btn-sm ${active ? 'btn-ghost' : 'btn-secondary'}`}
-                    style={{ width: '100%', justifyContent: 'center', gap: 6, fontSize: 12.5 }}
-                  >
-                    {active ? (
-                      <><UserX size={13} /> Mark Inactive</>
-                    ) : (
-                      <><RefreshCw size={13} /> Reactivate Partner</>
-                    )}
-                  </button>
-                </div>
+                {/* Status toggle button — Admin only */}
+{role === 'admin' && (
+  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+    <button
+      onClick={() => togglePartnerStatus(k)}
+      className={`btn btn-sm ${active ? 'btn-ghost' : 'btn-secondary'}`}
+      style={{ width: '100%', justifyContent: 'center', gap: 6, fontSize: 12.5 }}
+    >
+      {active ? (
+        <><UserX size={13} /> Mark Inactive</>
+      ) : (
+        <><RefreshCw size={13} /> Reactivate Partner</>
+      )}
+    </button>
+  </div>
+)}
               </div>
             </div>
           )

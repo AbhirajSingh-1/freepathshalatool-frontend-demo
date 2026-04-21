@@ -517,10 +517,11 @@ export default function Pickups({
   // auto-detect effect doesn't fight it.
   const navLinkedRef = useRef(false)
 
-  const activeDonors  = useMemo(() => (donors || []).filter(d => d.status !== 'Lost'), [donors])
-  const selectedDonor = useMemo(() => activeDonors.find(d => d.id === form.donorId) || null, [activeDonors, form.donorId])
-  const selectedKab   = useMemo(() => (partners || []).find(k => k.name === form.kabadiwala) || null, [partners, form.kabadiwala])
-  const rateChart     = selectedKab?.rateChart || null
+const activeDonors   = useMemo(() => (donors || []).filter(d => d.status !== 'Lost'), [donors])
+const selectedDonor  = useMemo(() => activeDonors.find(d => d.id === form.donorId) || null, [activeDonors, form.donorId])
+const activePartners = useMemo(() => (partners || []).filter(k => k.isActive !== false), [partners])
+const selectedKab    = useMemo(() => activePartners.find(k => k.name === form.kabadiwala) || null, [activePartners, form.kabadiwala])
+const rateChart      = selectedKab?.rateChart || null
 
   const rstTotalWeight = useMemo(() =>
     form.rstItems.filter(i => i !== 'Others').reduce((sum, item) => {
@@ -813,7 +814,7 @@ export default function Pickups({
                 {selectedDonor?.sector && <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--secondary)', marginLeft: 2 }}>— filtered for {selectedDonor.sector}</span>}
               </label>
               <PartnerSearch
-                partners={partners || []}
+                partners={activePartners}
                 donorSector={selectedDonor?.sector || ''}
                 value={form.kabadiwala}
                 onChange={val => {
