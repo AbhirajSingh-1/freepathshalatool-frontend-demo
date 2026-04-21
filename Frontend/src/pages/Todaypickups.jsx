@@ -1,12 +1,12 @@
 // Frontend/src/pages/TodayPickups.jsx
 // Tabs: Pending / Completed / Others — real-time via AppContext
-// FIX: handleRecord now passes pickupId so Pickups page calls recordPickup()
-//      on the existing scheduled entry instead of creating a duplicate.
+// ENHANCEMENT: Location-based sort (Sector → Society) with grouped view
 import { useMemo, useState } from 'react'
 import {
   Calendar, Truck, CheckCircle, Clock,
   MapPin, Phone, Hash, AlertTriangle,
-  Users, ChevronRight, ClipboardList,
+  Users, ChevronRight, ClipboardList, ArrowUpDown,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { useApp }  from '../context/AppContext'
 import { useRole } from '../context/RoleContext'
@@ -148,7 +148,7 @@ function PickupCard({ pickup, onRecord }) {
                 onClick={() => onRecord(pickup)}
                 style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '8px 14px', fontSize: 12.5, fontWeight: 700, whiteSpace: 'nowrap' }}
               >
-                <Truck size={13} />Record Pickup<ChevronRight size={12} />
+                <Truck size={13} />Record<ChevronRight size={12} />
               </button>
             ) : isCompleted ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700, color: 'var(--secondary)', padding: '7px 12px', background: 'var(--secondary-light)', borderRadius: 8, whiteSpace: 'nowrap' }}>
@@ -162,6 +162,132 @@ function PickupCard({ pickup, onRecord }) {
           </div>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Sector group header ───────────────────────────────────────────────────────
+function SectorGroup({ sector, pickups, onRecord, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  const pendingCount   = pickups.filter(p => p.status === 'Pending').length
+  const completedCount = pickups.filter(p => p.status === 'Completed').length
+
+  // Group by society within sector
+  const bySociety = useMemo(() => {
+    const map = {}
+    pickups.forEach(p => {
+      const key = p.society || 'Other'
+      if (!map[key]) map[key] = []
+      map[key].push(p)
+    })
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b))
+  }, [pickups])
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      {/* Sector header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+          padding: '10px 14px', marginBottom: open ? 8 : 0,
+          background: 'linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%)',
+          borderRadius: open ? '10px 10px 0 0' : 10,
+          border: 'none', cursor: 'pointer', textAlign: 'left',
+          transition: 'border-radius 0.15s',
+        }}
+      >
+        <MapPin size={14} color="rgba(255,255,255,0.8)" style={{ flexShrink: 0 }} />
+        <span style={{ fontWeight: 700, fontSize: 13.5, color: 'white', flex: 1 }}>
+          {sector}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {pendingCount > 0 && (
+            <span style={{ background: 'rgba(255,255,255,0.2)', color: 'white', borderRadius: 20, fontSize: 11, fontWeight: 700, padding: '1px 8px' }}>
+              {pendingCount} pending
+            </span>
+          )}
+          {completedCount > 0 && (
+            <span style={{ background: 'rgba(34,197,94,0.3)', color: 'white', borderRadius: 20, fontSize: 11, fontWeight: 700, padding: '1px 8px' }}>
+              {completedCount} done
+            </span>
+          )}
+          <span style={{ color: 'rgba(255,255,255,0.7)', display: 'flex' }}>
+            {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+          </span>
+        </div>
+      </button>
+
+      {open && (
+        <div style={{ border: '1px solid var(--secondary)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden', background: 'var(--bg)' }}>
+          {bySociety.map(([society, sPickups]) => (
+            <div key={society}>
+              {/* Society sub-header */}
+              {bySociety.length > 1 && (
+                <div style={{
+                  padding: '6px 14px',
+                  background: 'var(--secondary-light)',
+                  borderBottom: '1px solid rgba(27,94,53,0.12)',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  fontSize: 11.5, fontWeight: 700, color: 'var(--secondary)',
+                }}>
+                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--secondary)', flexShrink: 0 }} />
+                  {society}
+                  <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--secondary)', opacity: 0.7, marginLeft: 2 }}>
+                    · {sPickups.length} pickup{sPickups.length !== 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+              <div style={{ padding: '8px 8px 0' }}>
+                {sPickups.map(p => <PickupCard key={p.id} pickup={p} onRecord={onRecord} />)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Sort Controls ─────────────────────────────────────────────────────────────
+function SortControl({ sortMode, setSortMode }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      marginBottom: 14, padding: '8px 12px',
+      background: 'var(--surface)', borderRadius: 8,
+      border: '1px solid var(--border-light)',
+      boxShadow: 'var(--shadow)',
+      flexWrap: 'wrap',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+        <ArrowUpDown size={13} color="var(--text-muted)" />
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          Sort by:
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button
+          onClick={() => setSortMode('time')}
+          className={`btn btn-sm ${sortMode === 'time' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          <Clock size={12} /> Time Slot
+        </button>
+        <button
+          onClick={() => setSortMode('location')}
+          className={`btn btn-sm ${sortMode === 'location' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+        >
+          <MapPin size={12} /> Sector → Society
+        </button>
+      </div>
+      {sortMode === 'location' && (
+        <span style={{ fontSize: 11, color: 'var(--secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+          <MapPin size={10} /> Grouped by area for efficient routing
+        </span>
+      )}
     </div>
   )
 }
@@ -204,42 +330,86 @@ function TabBtn({ label, count, active, color, onClick }) {
   )
 }
 
+// ── Location-grouped list ─────────────────────────────────────────────────────
+function LocationGroupedList({ pickups, onRecord }) {
+  // Group by sector first
+  const bySector = useMemo(() => {
+    const map = {}
+    pickups.forEach(p => {
+      const key = p.sector || 'Unassigned'
+      if (!map[key]) map[key] = []
+      map[key].push(p)
+    })
+    // Sort sectors; "Unassigned" goes last
+    return Object.entries(map).sort(([a], [b]) => {
+      if (a === 'Unassigned') return 1
+      if (b === 'Unassigned') return -1
+      return a.localeCompare(b)
+    })
+  }, [pickups])
+
+  if (bySector.length === 0) return null
+
+  return (
+    <div>
+      {bySector.map(([sector, sectorPickups]) => (
+        <SectorGroup
+          key={sector}
+          sector={sector}
+          pickups={sectorPickups}
+          onRecord={onRecord}
+          defaultOpen
+        />
+      ))}
+    </div>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 export default function TodayPickups({ onNav }) {
   const { pickups } = useApp()
   const { role, ROLE_PAGES } = useRole()
 
   const [activeTab, setActiveTab] = useState('pending')
+  const [sortMode,  setSortMode]  = useState('time') // 'time' | 'location'
 
   const today = todayStr()
 
+  // Sort by time slot (original behaviour)
+  const timeOrder = [
+    '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
+    '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM',
+  ]
+
   const todayPickups = useMemo(() => {
-    const timeOrder = [
-      '9:00 AM', '10:00 AM', '11:00 AM', '12:00 PM',
-      '2:00 PM', '3:00 PM', '4:00 PM', '5:00 PM', '6:00 PM',
-    ]
-    return pickups
-      .filter(p => p.date === today)
-      .sort((a, b) => {
-        const at = timeOrder.findIndex(t => (a.timeSlot || '').startsWith(t))
-        const bt = timeOrder.findIndex(t => (b.timeSlot || '').startsWith(t))
-        if (at !== -1 && bt !== -1 && at !== bt) return at - bt
-        if (at === -1 && bt !== -1) return 1
-        if (at !== -1 && bt === -1) return -1
+    const base = pickups.filter(p => p.date === today)
+
+    if (sortMode === 'location') {
+      // Sort: sector → society → donor name
+      return [...base].sort((a, b) => {
+        const secCmp = (a.sector  || 'ZZZ').localeCompare(b.sector  || 'ZZZ')
+        if (secCmp !== 0) return secCmp
+        const socCmp = (a.society || 'ZZZ').localeCompare(b.society || 'ZZZ')
+        if (socCmp !== 0) return socCmp
         return (a.donorName || '').localeCompare(b.donorName || '')
       })
-  }, [pickups, today])
+    }
+
+    // Default: sort by time slot
+    return [...base].sort((a, b) => {
+      const at = timeOrder.findIndex(t => (a.timeSlot || '').startsWith(t))
+      const bt = timeOrder.findIndex(t => (b.timeSlot || '').startsWith(t))
+      if (at !== -1 && bt !== -1 && at !== bt) return at - bt
+      if (at === -1 && bt !== -1) return 1
+      if (at !== -1 && bt === -1) return -1
+      return (a.donorName || '').localeCompare(b.donorName || '')
+    })
+  }, [pickups, today, sortMode])
 
   const pending   = useMemo(() => todayPickups.filter(p => p.status === 'Pending'),   [todayPickups])
   const completed = useMemo(() => todayPickups.filter(p => p.status === 'Completed'), [todayPickups])
   const others    = useMemo(() => todayPickups.filter(p => p.status !== 'Pending' && p.status !== 'Completed'), [todayPickups])
 
-  /**
-   * FIX: Pass both donorId AND pickupId to the Pickups page.
-   * Pickups.jsx will detect initialPickupId and call recordPickup() on the
-   * existing scheduled entry instead of createPickup() — preventing duplicates
-   * and correctly moving the card from Pending → Completed.
-   */
   const handleRecord = (pickup) => onNav('pickups', {
     donorId:  pickup.donorId,
     pickupId: pickup.id,
@@ -253,6 +423,27 @@ export default function TodayPickups({ onNav }) {
   const progressPct = todayPickups.length > 0
     ? Math.round((completed.length / todayPickups.length) * 100)
     : 0
+
+  // Render the appropriate list (flat or grouped) for a given set of pickups
+  const renderPickupList = (list, emptyTitle, emptyText, emptyIcon) => {
+    if (list.length === 0) {
+      return (
+        <div className="empty-state" style={{ padding: 48 }}>
+          <div className="empty-icon" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>
+            {emptyIcon}
+          </div>
+          <h3>{emptyTitle}</h3>
+          <p>{emptyText}</p>
+        </div>
+      )
+    }
+
+    if (sortMode === 'location') {
+      return <LocationGroupedList pickups={list} onRecord={handleRecord} />
+    }
+
+    return list.map(p => <PickupCard key={p.id} pickup={p} onRecord={handleRecord} />)
+  }
 
   return (
     <div className="page-body">
@@ -317,7 +508,7 @@ export default function TodayPickups({ onNav }) {
         )}
       </div>
 
-      {/* ── "Others" alert (always visible when non-empty) ── */}
+      {/* ── "Others" alert ── */}
       {others.length > 0 && (
         <div className="alert-strip alert-warning" style={{ marginBottom: 16 }}>
           <AlertTriangle size={14} style={{ flexShrink: 0 }} />
@@ -380,6 +571,9 @@ export default function TodayPickups({ onNav }) {
         </div>
       ) : (
         <>
+          {/* Sort control — always shown when there are pickups */}
+          <SortControl sortMode={sortMode} setSortMode={setSortMode} />
+
           {/* PENDING TAB */}
           {activeTab === 'pending' && (
             <>
@@ -393,11 +587,24 @@ export default function TodayPickups({ onNav }) {
                 </div>
               ) : (
                 <>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Clock size={12} color="var(--info)" />
-                    <span><strong style={{ color: 'var(--text-primary)' }}>{pending.length}</strong> pickup{pending.length !== 1 ? 's' : ''} awaiting recording — tap <strong>Record Pickup</strong> to complete</span>
-                  </div>
-                  {pending.map(p => <PickupCard key={p.id} pickup={p} onRecord={handleRecord} />)}
+                  {sortMode === 'time' && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Clock size={12} color="var(--info)" />
+                      <span><strong style={{ color: 'var(--text-primary)' }}>{pending.length}</strong> pickup{pending.length !== 1 ? 's' : ''} — sorted by time slot</span>
+                    </div>
+                  )}
+                  {sortMode === 'location' && (
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <MapPin size={12} color="var(--secondary)" />
+                      <span><strong style={{ color: 'var(--text-primary)' }}>{pending.length}</strong> pickup{pending.length !== 1 ? 's' : ''} — grouped by sector and society for efficient routing</span>
+                    </div>
+                  )}
+                  {renderPickupList(
+                    pending,
+                    'All Done! 🎉',
+                    'All pickups for today have been completed.',
+                    <CheckCircle size={24} />
+                  )}
                 </>
               )}
             </>
@@ -420,7 +627,12 @@ export default function TodayPickups({ onNav }) {
                     <CheckCircle size={12} color="var(--secondary)" />
                     <span><strong style={{ color: 'var(--text-primary)' }}>{completed.length}</strong> pickup{completed.length !== 1 ? 's' : ''} completed today</span>
                   </div>
-                  {completed.map(p => <PickupCard key={p.id} pickup={p} onRecord={handleRecord} />)}
+                  {renderPickupList(
+                    completed,
+                    'No Completed Pickups Yet',
+                    'Completed pickups will appear here once recorded.',
+                    <Truck size={24} />
+                  )}
                 </>
               )}
             </>
@@ -432,7 +644,12 @@ export default function TodayPickups({ onNav }) {
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
                 <strong style={{ color: 'var(--warning)' }}>{others.length}</strong> pickup{others.length !== 1 ? 's' : ''} with status requiring attention
               </div>
-              {others.map(p => <PickupCard key={p.id} pickup={p} onRecord={handleRecord} />)}
+              {renderPickupList(
+                others,
+                'No Issues',
+                'All pickups are in a normal state.',
+                <AlertTriangle size={24} />
+              )}
             </>
           )}
         </>
