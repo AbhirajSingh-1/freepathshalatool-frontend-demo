@@ -1,11 +1,12 @@
 // Frontend/src/pages/Pickuppartners.jsx
-// CHANGE: Removed "Reports" tab entirely. Only the Directory view remains.
+// CHANGE: Added Active/Inactive status system + document uploads (photo, Aadhaar)
 import { useState, useMemo, useCallback } from 'react'
 import {
   Phone, Plus, Edit2, Trash2, X, Star, Mail,
   IndianRupee, AlertCircle,
   ChevronDown, ChevronUp, Package,
   MapPin, Search, Users, Building2, Layers,
+  UserCheck, UserX, RefreshCw, Upload, Image, FileText,
 } from 'lucide-react'
 import { useApp }  from '../context/AppContext'
 import { useRole } from '../context/RoleContext'
@@ -25,6 +26,9 @@ const DEFAULT_RATE_CHART = Object.fromEntries(
   })[k] || 0])
 )
 
+// ── Helper: is partner active? ────────────────────────────────────────────────
+const isPartnerActive = (k) => k.isActive !== false  // undefined → active
+
 // ── Rate Chart mini display ───────────────────────────────────────────────────
 function RateChartMini({ rateChart, expanded, onToggle }) {
   if (!rateChart) return null
@@ -39,7 +43,7 @@ function RateChartMini({ rateChart, expanded, onToggle }) {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 80px', padding:'5px 10px', background:'var(--secondary-light)', fontSize:10.5, fontWeight:700, color:'var(--secondary)', textTransform:'uppercase' }}>
             <span>Item</span><span style={{ textAlign:'right' }}>₹/kg</span>
           </div>
-          {entries.map(([item, rate], i) => (
+          {entries.map(([ item, rate], i) => (
             <div key={item} style={{ display:'grid', gridTemplateColumns:'1fr 80px', padding:'5px 10px', fontSize:12, borderTop: i > 0 ? '1px solid var(--border-light)' : 'none', background: i%2===0 ? 'transparent' : 'var(--bg)' }}>
               <span style={{ color:'var(--text-secondary)' }}>{item}</span>
               <span style={{ textAlign:'right', fontWeight:700, color:'var(--secondary)' }}>₹{rate}</span>
@@ -110,19 +114,14 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
   }
 
   const toggleSociety = (soc) => {
-    if (safeSocieties.includes(soc)) {
-      onSocieties(safeSocieties.filter(s => s !== soc))
-    } else {
-      if (safeSocieties.length >= 5) return
-      onSocieties([...safeSocieties, soc])
-    }
+    if (safeSocieties.includes(soc)) { onSocieties(safeSocieties.filter(s => s !== soc)) }
+    else { if (safeSocieties.length >= 5) return; onSocieties([...safeSocieties, soc]) }
   }
 
   const addCustomSociety = () => {
     const trimmed = customSocInput.trim()
     if (!trimmed || safeSocieties.includes(trimmed) || safeSocieties.length >= 5) return
-    onSocieties([...safeSocieties, trimmed])
-    setCustomSocInput('')
+    onSocieties([...safeSocieties, trimmed]); setCustomSocInput('')
   }
 
   return (
@@ -149,9 +148,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
                 <input autoFocus value={secSearch} onChange={e => setSecSearch(e.target.value)} placeholder="Search sectors…" style={{ width:'100%', fontSize:12.5, border:'1px solid var(--border)', borderRadius:6, padding:'5px 10px', outline:'none' }}/>
               </div>
               <div style={{ maxHeight:200, overflowY:'auto', padding:6 }}>
-                {filteredSectors.length === 0 ? (
-                  <div style={{ padding:'12px', textAlign:'center', fontSize:12.5, color:'var(--text-muted)' }}>No sectors match</div>
-                ) : filteredSectors.map(s => {
+                {filteredSectors.map(s => {
                   const selected = safeSectors.includes(s)
                   const disabled = !selected && safeSectors.length >= 3
                   return (
@@ -204,7 +201,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
   )
 }
 
-// ── Executive: sector-based partner search ────────────────────────────────────
+// ── Executive sector search ───────────────────────────────────────────────────
 function ExecutiveSectorSearch({ partners, onAddNew }) {
   const [city,    setCity]    = useState('Gurgaon')
   const [sector,  setSector]  = useState('')
@@ -216,14 +213,16 @@ function ExecutiveSectorSearch({ partners, onAddNew }) {
     return []
   }, [city, sector])
 
+  const activePartners = useMemo(() => partners.filter(isPartnerActive), [partners])
+
   const matchingPartners = useMemo(() => {
     if (!sector) return []
-    return (partners || []).filter(p => {
-      const secs = Array.isArray(p.sectors)   ? p.sectors   : []
+    return activePartners.filter(p => {
+      const secs = Array.isArray(p.sectors) ? p.sectors : []
       const socs = Array.isArray(p.societies) ? p.societies : []
       return secs.includes(sector) || (society && socs.includes(society))
     })
-  }, [partners, sector, society])
+  }, [activePartners, sector, society])
 
   return (
     <div>
@@ -243,48 +242,24 @@ function ExecutiveSectorSearch({ partners, onAddNew }) {
         <div className="card-body">
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))', gap:14 }}>
             {[
-              { step:'1', label:'City', content:(
-                <select value={city} onChange={e => { setCity(e.target.value); setSector(''); setSociety('') }} style={{ width:'100%', fontSize:13 }}>
-                  {CITIES.map(c => <option key={c}>{c}</option>)}
-                </select>
-              )},
-              { step:'2', label:'Sector / Area', content:(
-                <select value={sector} onChange={e => { setSector(e.target.value); setSociety('') }} disabled={!city} style={{ width:'100%', fontSize:13 }}>
-                  <option value="">— Select Sector —</option>
-                  {sectorOptions.map(s => <option key={s}>{s}</option>)}
-                </select>
-              )},
+              { step:'1', label:'City', content:(<select value={city} onChange={e => { setCity(e.target.value); setSector(''); setSociety('') }} style={{ width:'100%', fontSize:13 }}>{CITIES.map(c => <option key={c}>{c}</option>)}</select>) },
+              { step:'2', label:'Sector / Area', content:(<select value={sector} onChange={e => { setSector(e.target.value); setSociety('') }} disabled={!city} style={{ width:'100%', fontSize:13 }}><option value="">— Select Sector —</option>{sectorOptions.map(s => <option key={s}>{s}</option>)}</select>) },
               { step:'3', label:'Society (optional)', content: societyOptions.length > 0 ? (
                 <select value={society} onChange={e => setSociety(e.target.value)} disabled={!sector} style={{ width:'100%', fontSize:13 }}>
                   <option value="">— All societies —</option>
                   {societyOptions.map(s => <option key={s}>{s}</option>)}
                 </select>
-              ) : (
-                <input value={society} onChange={e => setSociety(e.target.value)} placeholder={sector ? 'Type society…' : 'Select sector first'} disabled={!sector} style={{ width:'100%', fontSize:13 }}/>
-              )},
+              ) : (<input value={society} onChange={e => setSociety(e.target.value)} placeholder={sector ? 'Type society…' : 'Select sector first'} disabled={!sector} style={{ width:'100%', fontSize:13 }}/>) },
             ].map(({ step, label, content }) => (
               <div key={step}>
                 <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
-                  <div style={{ width:20, height:20, borderRadius:'50%', background: step > 1 && !city ? 'var(--border)' : 'var(--primary)', color:'#fff', fontSize:11, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{step}</div>
+                  <div style={{ width:20, height:20, borderRadius:'50%', background:'var(--primary)', color:'#fff', fontSize:11, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{step}</div>
                   <label style={{ margin:0, fontSize:12.5, fontWeight:700, color:'var(--text-secondary)' }}>{label}</label>
                 </div>
                 {content}
               </div>
             ))}
           </div>
-
-          {sector && (
-            <div style={{ marginTop:16, display:'flex', alignItems:'center', gap:8, padding:'8px 12px', background:'var(--bg)', borderRadius:8, fontSize:12, flexWrap:'wrap' }}>
-              <MapPin size={12} color="var(--primary)"/>
-              <span style={{ fontWeight:700, color:'var(--primary)' }}>{city}</span>
-              <span style={{ color:'var(--text-muted)' }}>›</span>
-              <span style={{ fontWeight:700, color:'var(--secondary)' }}>{sector}</span>
-              {society && <><span style={{ color:'var(--text-muted)' }}>›</span><span style={{ fontWeight:700, color:'var(--info)' }}>{society}</span></>}
-              <button onClick={() => { setSector(''); setSociety('') }} style={{ marginLeft:'auto', border:'none', background:'none', cursor:'pointer', color:'var(--text-muted)', display:'flex', alignItems:'center', gap:3, fontSize:11 }}>
-                <X size={11}/> Clear
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -298,7 +273,7 @@ function ExecutiveSectorSearch({ partners, onAddNew }) {
         <div className="empty-state" style={{ padding:40 }}>
           <div className="empty-icon"><Users size={22}/></div>
           <h3>No partner assigned yet</h3>
-          <p>No pickup partner covers {sector}{society ? ` / ${society}` : ''} yet.</p>
+          <p>No active pickup partner covers {sector}{society ? ` / ${society}` : ''} yet.</p>
         </div>
       ) : (
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:14 }}>
@@ -306,22 +281,19 @@ function ExecutiveSectorSearch({ partners, onAddNew }) {
             <div key={k.id} className="card" style={{ borderLeft:'3px solid var(--secondary)' }}>
               <div className="card-body">
                 <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:12 }}>
-                  <div style={{ width:48, height:48, background:'var(--secondary-light)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontSize:20, fontWeight:700, color:'var(--secondary)', flexShrink:0 }}>
-                    {(k.name||'?')[0].toUpperCase()}
-                  </div>
+                  {k.photo ? (
+                    <img src={k.photo} alt={k.name} style={{ width:48, height:48, borderRadius:12, objectFit:'cover', flexShrink:0, border:'2px solid var(--secondary-light)' }} />
+                  ) : (
+                    <div style={{ width:48, height:48, background:'var(--secondary-light)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontSize:20, fontWeight:700, color:'var(--secondary)', flexShrink:0 }}>
+                      {(k.name||'?')[0].toUpperCase()}
+                    </div>
+                  )}
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ fontWeight:700, fontSize:15, marginBottom:3 }}>{k.name}</div>
                     <div style={{ fontSize:12.5, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:4 }}><Phone size={11}/> {k.mobile||'—'}</div>
                     <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:4 }}><Star size={11} fill="var(--accent)" color="var(--accent)"/><span style={{ fontSize:12, fontWeight:600 }}>{k.rating??4.0}</span></div>
                   </div>
                 </div>
-                {(k.sectors||[]).length > 0 && (
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:12 }}>
-                    {(k.sectors||[]).map(s => (
-                      <span key={s} style={{ background: s===sector ? 'var(--secondary)' : 'var(--secondary-light)', color: s===sector ? '#fff' : 'var(--secondary)', borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:600 }}>{s}</span>
-                    ))}
-                  </div>
-                )}
                 <div style={{ background:'var(--secondary-light)', borderRadius:10, padding:'12px 14px' }}>
                   <div style={{ fontSize:11, fontWeight:700, color:'var(--secondary)', textTransform:'uppercase', marginBottom:4 }}>Call for Pickup</div>
                   <div style={{ fontSize:18, fontWeight:800, color:'var(--secondary)', fontFamily:'var(--font-display)' }}>{k.mobile}</div>
@@ -335,7 +307,7 @@ function ExecutiveSectorSearch({ partners, onAddNew }) {
   )
 }
 
-// ── Per-partner summary cards (shown in directory) ────────────────────────────
+// ── Per-partner payment summary ───────────────────────────────────────────────
 function PartnerPaymentSummaryCards({ partner, raddiRecords }) {
   const stats = useMemo(() => {
     if (!partner?.name || !Array.isArray(raddiRecords)) return { totalPickups:0, totalAmount:0, received:0, pending:0 }
@@ -365,6 +337,38 @@ function PartnerPaymentSummaryCards({ partner, raddiRecords }) {
   )
 }
 
+// ── Document upload field ─────────────────────────────────────────────────────
+function DocUpload({ label, icon: Icon, value, accept, onChange, onRemove, preview = false }) {
+  return (
+    <div className="form-group" style={{ margin: 0 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <Icon size={12} color="var(--info)" />{label}
+        <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>(optional)</span>
+      </label>
+      {value ? (
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          {preview ? (
+            <img src={value} alt={label} style={{ width: 80, height: 80, borderRadius: 10, objectFit: 'cover', border: '1.5px solid var(--border)', display: 'block' }} />
+          ) : (
+            <div style={{ padding: '8px 12px', background: 'var(--info-bg)', borderRadius: 8, border: '1px solid var(--info)', fontSize: 12, color: 'var(--info)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FileText size={13} /> Document uploaded ✓
+            </div>
+          )}
+          <button type="button" onClick={onRemove}
+            style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', border: 'none', background: 'var(--danger)', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10 }}>
+            <X size={10} />
+          </button>
+        </div>
+      ) : (
+        <label className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', cursor: 'pointer' }}>
+          <Upload size={13} /> Upload {label}
+          <input type="file" accept={accept} style={{ display: 'none' }} onChange={onChange} />
+        </label>
+      )}
+    </div>
+  )
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 export default function PickupPartners() {
   const { kabadiwalas: rawPartners, raddiRecords, addPartner, updatePartner, deletePartner } = useApp()
@@ -372,11 +376,25 @@ export default function PickupPartners() {
 
   const partners = useMemo(() => Array.isArray(rawPartners) ? rawPartners : [], [rawPartners])
 
+  // ── Status tab ────────────────────────────────────────────────────────────
+  const [statusTab, setStatusTab] = useState('active') // 'active' | 'inactive'
+
+  const activeCount   = useMemo(() => partners.filter(isPartnerActive).length,  [partners])
+  const inactiveCount = useMemo(() => partners.filter(p => !isPartnerActive(p)).length, [partners])
+
+  const togglePartnerStatus = useCallback(async (k) => {
+    try { await updatePartner(k.id, { isActive: !isPartnerActive(k) }) }
+    catch (e) { console.error('Status toggle error:', e) }
+  }, [updatePartner])
+
+  // ── Modal state ───────────────────────────────────────────────────────────
   const [modal,          setModal]          = useState(false)
   const [form,           setForm]           = useState({
     name:'', mobile:'', email:'', city:'Gurgaon',
     sectors:[], societies:[], area:'',
     rateChart:{ ...DEFAULT_RATE_CHART },
+    photo: null,
+    aadhaarDoc: null,
   })
   const [editing,        setEditing]        = useState(null)
   const [saving,         setSaving]         = useState(false)
@@ -390,13 +408,14 @@ export default function PickupPartners() {
   const [dirFilterSector,  setDirFilterSector]  = useState('')
   const [dirFilterSociety, setDirFilterSociety] = useState('')
 
-  const dirSectorOptions = useMemo(() => dirFilterCity ? (CITY_SECTORS[dirFilterCity]||[]) : [], [dirFilterCity])
+  const dirSectorOptions  = useMemo(() => dirFilterCity ? (CITY_SECTORS[dirFilterCity]||[]) : [], [dirFilterCity])
   const dirSocietyOptions = useMemo(() => {
     if (!dirFilterCity || !dirFilterSector) return []
     if (dirFilterCity === 'Gurgaon' && GURGAON_SOCIETIES[dirFilterSector]) return GURGAON_SOCIETIES[dirFilterSector]
     return []
   }, [dirFilterCity, dirFilterSector])
 
+  // ── Filtered partners (includes status tab filter) ────────────────────────
   const filteredPartners = useMemo(() => {
     const q = dirSearch.toLowerCase().trim()
     return partners.filter(k => {
@@ -404,19 +423,36 @@ export default function PickupPartners() {
       const matchCity    = !dirFilterCity    || k.city   === dirFilterCity
       const matchSector  = !dirFilterSector  || (k.sectors  ||[]).includes(dirFilterSector)
       const matchSociety = !dirFilterSociety || (k.societies||[]).includes(dirFilterSociety)
-      return matchSearch && matchCity && matchSector && matchSociety
+      const matchStatus  = statusTab === 'active' ? isPartnerActive(k) : !isPartnerActive(k)
+      return matchSearch && matchCity && matchSector && matchSociety && matchStatus
     })
-  }, [partners, dirSearch, dirFilterCity, dirFilterSector, dirFilterSociety])
+  }, [partners, dirSearch, dirFilterCity, dirFilterSector, dirFilterSociety, statusTab])
 
   const hasDirFilters = dirSearch || dirFilterCity || dirFilterSector || dirFilterSociety
   const clearDirFilters = () => { setDirSearch(''); setDirFilterCity(''); setDirFilterSector(''); setDirFilterSociety('') }
 
+  // ── Document upload handlers ──────────────────────────────────────────────
+  const handleFileUpload = (key, previewMode = false) => (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => setForm(f => ({ ...f, [key]: ev.target.result }))
+    reader.readAsDataURL(file)
+    e.target.value = '' // reset so same file can be re-uploaded
+  }
+
+  // ── Modal open/close ──────────────────────────────────────────────────────
   const open = useCallback((k = null) => {
     setEditing(k); setError(''); setShowRateEditor(false)
     if (k) {
-      setForm({ name:k.name||'', mobile:k.mobile||'', email:k.email||'', city:k.city||'Gurgaon', sectors:Array.isArray(k.sectors)?[...k.sectors]:[], societies:Array.isArray(k.societies)?[...k.societies]:[], area:k.area||'', rateChart:{ ...DEFAULT_RATE_CHART, ...(k.rateChart||{}) } })
+      setForm({
+        name: k.name||'', mobile: k.mobile||'', email: k.email||'',
+        city: k.city||'Gurgaon', sectors: Array.isArray(k.sectors)?[...k.sectors]:[],
+        societies: Array.isArray(k.societies)?[...k.societies]:[], area: k.area||'',
+        rateChart: { ...DEFAULT_RATE_CHART, ...(k.rateChart||{}) },
+        photo: k.photo || null, aadhaarDoc: k.aadhaarDoc || null,
+      })
     } else {
-      setForm({ name:'', mobile:'', email:'', city:'Gurgaon', sectors:[], societies:[], area:'', rateChart:{ ...DEFAULT_RATE_CHART } })
+      setForm({ name:'', mobile:'', email:'', city:'Gurgaon', sectors:[], societies:[], area:'', rateChart:{ ...DEFAULT_RATE_CHART }, photo: null, aadhaarDoc: null })
     }
     setModal(true)
   }, [])
@@ -438,30 +474,63 @@ export default function PickupPartners() {
   const removeK = useCallback(async (id) => {
     if (!can.deletePartner) return
     if (!window.confirm('Remove this pickup partner?')) return
-    try { await deletePartner(id) }
-    catch (err) { console.error('Delete error:', err) }
+    try { await deletePartner(id) } catch (err) { console.error(err) }
   }, [can.deletePartner, deletePartner])
 
   const toggleRate = useCallback((id) => setExpandedRates(prev => ({ ...prev, [id]: !prev[id] })), [])
 
   const isExecutive = role === 'executive'
 
+  // ── Modal JSX ─────────────────────────────────────────────────────────────
   function renderModal() {
     return (
       <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && close()}>
-        <div className="modal modal-lg" style={{ maxWidth:700, width:'95vw' }}>
+        <div className="modal modal-lg" style={{ maxWidth:720, width:'95vw' }}>
           <div className="modal-header">
             <div className="modal-title">{editing ? 'Edit Pickup Partner' : 'Add Pickup Partner'}</div>
             {editing?.id && <span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:'white', background:'var(--secondary)', padding:'2px 8px', borderRadius:5 }}>{editing.id}</span>}
             <button className="btn btn-ghost btn-icon btn-sm" onClick={close}><X size={16}/></button>
           </div>
-          <div className="modal-body" style={{ overflowY:'auto', maxHeight:'72vh' }}>
+          <div className="modal-body" style={{ overflowY:'auto', maxHeight:'76vh' }}>
             {error && <div className="alert-strip alert-danger" style={{ marginBottom:16 }}><AlertCircle size={13}/>{error}</div>}
+
+            {/* Basic Info */}
             <div className="form-grid" style={{ marginBottom:16 }}>
               <div className="form-group"><label>Name <span className="required">*</span></label><input value={form.name||''} onChange={e => setForm(f=>({...f,name:e.target.value}))} placeholder="Partner full name" autoFocus/></div>
               <div className="form-group"><label>Mobile <span className="required">*</span></label><input value={form.mobile||''} onChange={e => setForm(f=>({...f,mobile:e.target.value}))} placeholder="10-digit number" maxLength={10} inputMode="numeric"/></div>
               <div className="form-group full"><label>Email <span style={{ fontSize:11, fontWeight:400, color:'var(--text-muted)', marginLeft:4 }}>(optional)</span></label><input type="email" value={form.email||''} onChange={e => setForm(f=>({...f,email:e.target.value}))} placeholder="partner@example.com"/></div>
             </div>
+
+            {/* Documents section */}
+            <div style={{ marginBottom:16, padding:14, background:'var(--info-bg)', borderRadius:10, border:'1px solid rgba(59,130,246,0.2)' }}>
+              <div style={{ fontWeight:700, fontSize:13.5, color:'var(--info)', marginBottom:3, display:'flex', alignItems:'center', gap:6 }}>
+                <FileText size={14} /> Documents
+              </div>
+              <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:12 }}>
+                Upload for verification and records — not mandatory.
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                <DocUpload
+                  label="Partner Photo"
+                  icon={Image}
+                  value={form.photo}
+                  accept="image/*"
+                  preview
+                  onChange={handleFileUpload('photo', true)}
+                  onRemove={() => setForm(f => ({ ...f, photo: null }))}
+                />
+                <DocUpload
+                  label="Aadhaar Card"
+                  icon={FileText}
+                  value={form.aadhaarDoc}
+                  accept="image/*,application/pdf"
+                  onChange={handleFileUpload('aadhaarDoc')}
+                  onRemove={() => setForm(f => ({ ...f, aadhaarDoc: null }))}
+                />
+              </div>
+            </div>
+
+            {/* Coverage area */}
             <div style={{ marginBottom:16, padding:14, background:'var(--bg)', borderRadius:10, border:'1px solid var(--border-light)' }}>
               <div style={{ fontWeight:700, fontSize:14, color:'var(--text-primary)', marginBottom:4 }}>Coverage Area</div>
               <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:12 }}>Select city, up to 3 sectors, and up to 5 societies.</div>
@@ -473,6 +542,8 @@ export default function PickupPartners() {
               </div>
               <CoverageSelector city={form.city||'Gurgaon'} sectors={form.sectors||[]} societies={form.societies||[]} onSectors={s => setForm(f=>({...f,sectors:s}))} onSocieties={s => setForm(f=>({...f,societies:s}))}/>
             </div>
+
+            {/* Rate chart */}
             <div style={{ marginBottom:8 }}>
               <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
                 <div><div style={{ fontWeight:700, fontSize:14 }}>Rate Chart</div><div style={{ fontSize:12, color:'var(--text-muted)' }}>Per-kg rates for each RST item</div></div>
@@ -504,7 +575,7 @@ export default function PickupPartners() {
     )
   }
 
-  // ── Executive view ──
+  // ── Executive view ────────────────────────────────────────────────────────
   if (isExecutive) {
     return (
       <div className="page-body">
@@ -514,20 +585,59 @@ export default function PickupPartners() {
     )
   }
 
-  // ── Admin / Manager: Directory only ──
+  // ── Admin / Manager: Directory ────────────────────────────────────────────
   return (
     <div className="page-body">
 
       {/* Header */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:10 }}>
         <div>
-          <div style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:700, color:'var(--text-primary)' }}>Pickup Partner Directory</div>
-          <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>{partners.length} partner{partners.length !== 1 ? 's' : ''} registered</div>
+          <div style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:700 }}>Pickup Partner Directory</div>
+          <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>{partners.length} partner{partners.length !== 1 ? 's' : ''} total</div>
         </div>
         <button className="btn btn-primary btn-sm" onClick={() => open()}>
           <Plus size={14}/> Add Pickup Partner
         </button>
       </div>
+
+      {/* Active / Inactive status tabs */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
+        <button
+          className={`btn btn-sm ${statusTab === 'active' ? 'btn-secondary' : 'btn-ghost'}`}
+          onClick={() => setStatusTab('active')}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', fontSize: 13 }}
+        >
+          <UserCheck size={14} />
+          Active Partners
+          <span style={{ background: statusTab === 'active' ? 'rgba(255,255,255,0.3)' : 'var(--border)', color: statusTab === 'active' ? 'white' : 'var(--text-muted)', borderRadius: 20, fontSize: 10.5, padding: '1px 8px', fontWeight: 700 }}>
+            {activeCount}
+          </span>
+        </button>
+        <button
+          className={`btn btn-sm ${statusTab === 'inactive' ? 'btn-danger' : 'btn-ghost'}`}
+          onClick={() => setStatusTab('inactive')}
+          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', fontSize: 13 }}
+        >
+          <UserX size={14} />
+          Inactive Partners
+          <span style={{ background: statusTab === 'inactive' ? 'rgba(255,255,255,0.3)' : 'var(--border)', color: statusTab === 'inactive' ? 'white' : 'var(--text-muted)', borderRadius: 20, fontSize: 10.5, padding: '1px 8px', fontWeight: 700 }}>
+            {inactiveCount}
+          </span>
+        </button>
+      </div>
+
+      {/* Inactive notice */}
+      {statusTab === 'inactive' && inactiveCount === 0 && (
+        <div className="alert-strip alert-success" style={{ marginBottom: 16 }}>
+          <UserCheck size={14} /> All pickup partners are currently active.
+        </div>
+      )}
+      {statusTab === 'inactive' && inactiveCount > 0 && (
+        <div className="alert-strip alert-warning" style={{ marginBottom: 16 }}>
+          <UserX size={14} />
+          <span><strong>{inactiveCount} partner{inactiveCount > 1 ? 's' : ''}</strong> marked inactive. Use "Reactivate" to restore them to the active pool.</span>
+        </div>
+      )}
 
       {/* Directory filters */}
       <div style={{ background:'var(--surface)', border:'1px solid var(--border-light)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:20, boxShadow:'var(--shadow)' }}>
@@ -560,57 +670,78 @@ export default function PickupPartners() {
             {dirSocietyOptions.map(s => <option key={s}>{s}</option>)}
           </select>
         </div>
-
-        {/* Active filter chips */}
-        {hasDirFilters && (
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginTop:10 }}>
-            {dirSearch && <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:20, background:'var(--primary-light)', color:'var(--primary)', fontSize:11.5, fontWeight:600, border:'1px solid rgba(232,82,26,0.2)' }}>"{dirSearch}" <button onClick={() => setDirSearch('')} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--primary)', padding:0, lineHeight:1 }}><X size={10}/></button></span>}
-            {dirFilterCity && <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:20, background:'var(--primary-light)', color:'var(--primary)', fontSize:11.5, fontWeight:600, border:'1px solid rgba(232,82,26,0.2)' }}>{dirFilterCity} <button onClick={() => { setDirFilterCity(''); setDirFilterSector(''); setDirFilterSociety('') }} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--primary)', padding:0, lineHeight:1 }}><X size={10}/></button></span>}
-            {dirFilterSector && <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:20, background:'var(--secondary-light)', color:'var(--secondary)', fontSize:11.5, fontWeight:600, border:'1px solid rgba(27,94,53,0.2)' }}>{dirFilterSector} <button onClick={() => { setDirFilterSector(''); setDirFilterSociety('') }} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--secondary)', padding:0, lineHeight:1 }}><X size={10}/></button></span>}
-            {dirFilterSociety && <span style={{ display:'inline-flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:20, background:'var(--info-bg)', color:'var(--info)', fontSize:11.5, fontWeight:600, border:'1px solid rgba(59,130,246,0.2)' }}>{dirFilterSociety} <button onClick={() => setDirFilterSociety('')} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--info)', padding:0, lineHeight:1 }}><X size={10}/></button></span>}
-          </div>
-        )}
       </div>
 
       {/* Result count */}
       <div style={{ fontSize:12.5, color:'var(--text-muted)', marginBottom:14 }}>
-        Showing <strong style={{ color:'var(--text-primary)' }}>{filteredPartners.length}</strong> of <strong>{partners.length}</strong> partners
+        Showing <strong style={{ color:'var(--text-primary)' }}>{filteredPartners.length}</strong> {statusTab} partner{filteredPartners.length !== 1 ? 's' : ''}
+        {hasDirFilters && <span> (filtered)</span>}
       </div>
 
       {/* Partner cards */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:16 }}>
         {filteredPartners.length === 0 ? (
           <div className="empty-state" style={{ gridColumn:'1/-1' }}>
-            <div className="empty-icon"><Search size={22}/></div>
-            <h3>{partners.length === 0 ? 'No pickup partners added' : 'No partners match your filters'}</h3>
-            <p>{partners.length === 0 ? 'Add your first pickup partner to get started.' : 'Try adjusting the city, sector, or society filter.'}</p>
+            <div className="empty-icon">
+              {statusTab === 'inactive' ? <UserX size={22}/> : <Search size={22}/>}
+            </div>
+            <h3>
+              {statusTab === 'inactive'
+                ? 'No Inactive Partners'
+                : partners.length === 0 ? 'No pickup partners added' : 'No partners match your filters'}
+            </h3>
+            <p>
+              {statusTab === 'inactive'
+                ? 'All partners are currently active.'
+                : partners.length === 0 ? 'Add your first pickup partner to get started.' : 'Try adjusting the filters.'}
+            </p>
             {hasDirFilters && <button className="btn btn-ghost btn-sm" onClick={clearDirFilters} style={{ marginTop:12 }}>Clear Filters</button>}
           </div>
         ) : filteredPartners.map(k => {
           if (!k?.id) return null
+          const active = isPartnerActive(k)
           return (
-            <div key={k.id} className="card">
+            <div key={k.id} className="card" style={{ borderLeft: `3px solid ${active ? 'var(--secondary)' : 'var(--border)'}`, opacity: active ? 1 : 0.8 }}>
               <div className="card-body">
                 <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:14 }}>
-                  <div style={{ width:48, height:48, background:'var(--secondary-light)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontSize:20, fontWeight:700, color:'var(--secondary)', flexShrink:0 }}>
-                    {(k.name||'?')[0].toUpperCase()}
-                  </div>
+                  {/* Avatar or photo */}
+                  {k.photo ? (
+                    <img src={k.photo} alt={k.name} style={{ width:48, height:48, borderRadius:12, objectFit:'cover', flexShrink:0, border:'2px solid var(--secondary-light)' }} />
+                  ) : (
+                    <div style={{ width:48, height:48, background: active ? 'var(--secondary-light)' : 'var(--border-light)', borderRadius:12, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontSize:20, fontWeight:700, color: active ? 'var(--secondary)' : 'var(--text-muted)', flexShrink:0 }}>
+                      {(k.name||'?')[0].toUpperCase()}
+                    </div>
+                  )}
+
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3, flexWrap:'wrap' }}>
-                      {k.id && <span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:'white', background:'var(--secondary)', padding:'2px 8px', borderRadius:5 }}>{k.id}</span>}
+                      {k.id && <span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:'white', background: active ? 'var(--secondary)' : 'var(--text-muted)', padding:'2px 8px', borderRadius:5 }}>{k.id}</span>}
                       <div style={{ fontWeight:700, fontSize:15 }}>{k.name||'—'}</div>
+                      {/* Status badge */}
+                      <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, fontWeight:700, background: active ? 'var(--secondary-light)' : 'var(--danger-bg)', color: active ? 'var(--secondary)' : 'var(--danger)' }}>
+                        {active ? '● Active' : '○ Inactive'}
+                      </span>
                     </div>
                     <div style={{ fontSize:12.5, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:4, marginTop:2 }}><Phone size={11}/> {k.mobile||'—'}</div>
                     {k.email && <div style={{ fontSize:12, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:4, marginTop:2 }}><Mail size={11}/> {k.email}</div>}
-                    <div style={{ display:'flex', alignItems:'center', gap:4, marginTop:4 }}><Star size={11} fill="var(--accent)" color="var(--accent)"/><span style={{ fontSize:12, fontWeight:600 }}>{k.rating??4.0}</span></div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:5, flexWrap:'wrap' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:3 }}><Star size={11} fill="var(--accent)" color="var(--accent)"/><span style={{ fontSize:12, fontWeight:600 }}>{k.rating??4.0}</span></div>
+                      {/* Aadhaar indicator */}
+                      {k.aadhaarDoc && (
+                        <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:'var(--info-bg)', color:'var(--info)', fontWeight:600, border:'1px solid rgba(59,130,246,0.2)' }}>
+                          📄 Aadhaar ✓
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ display:'flex', gap:4, flexShrink:0 }}>
+
+                  <div style={{ display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
                     {can.editPartner && <button className="btn btn-ghost btn-icon btn-sm" title="Edit" onClick={() => open(k)}><Edit2 size={13}/></button>}
                     {can.deletePartner && <button className="btn btn-danger btn-icon btn-sm" title="Delete" onClick={() => removeK(k.id)}><Trash2 size={13}/></button>}
                   </div>
                 </div>
 
-                {/* City + coverage chips */}
+                {/* Coverage */}
                 {((Array.isArray(k.sectors) && k.sectors.length > 0) || k.city || k.area) && (
                   <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:8, flexWrap:'wrap' }}>
                     <MapPin size={11} color="var(--text-muted)" style={{ marginTop:2, flexShrink:0 }}/>
@@ -634,6 +765,21 @@ export default function PickupPartners() {
 
                 <PartnerPaymentSummaryCards partner={k} raddiRecords={raddiRecords||[]}/>
                 <RateChartMini rateChart={k.rateChart} expanded={!!expandedRates[k.id]} onToggle={() => toggleRate(k.id)}/>
+
+                {/* Status toggle button */}
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
+                  <button
+                    onClick={() => togglePartnerStatus(k)}
+                    className={`btn btn-sm ${active ? 'btn-ghost' : 'btn-secondary'}`}
+                    style={{ width: '100%', justifyContent: 'center', gap: 6, fontSize: 12.5 }}
+                  >
+                    {active ? (
+                      <><UserX size={13} /> Mark Inactive</>
+                    ) : (
+                      <><RefreshCw size={13} /> Reactivate Partner</>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           )
