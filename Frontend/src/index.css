@@ -292,7 +292,7 @@ body {
 .btn-lg { padding: 11px 22px; font-size: 15px; }
 .btn-icon { padding: 8px; border-radius: var(--radius-sm); }
 
-.btn:disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+.btn:disabled { opacity: 0.5; cursor: not-allPending; pointer-events: none; }
 
 /* hide-xs: hide text on very small screens */
 @media (max-width: 400px) {

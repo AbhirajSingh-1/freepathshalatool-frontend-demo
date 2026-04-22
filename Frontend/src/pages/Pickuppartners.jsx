@@ -190,7 +190,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
                   const selected = safeSectors.includes(s)
                   const disabled = !selected && safeSectors.length >= 2
                   return (
-                    <button key={s} type="button" onClick={() => { if (!disabled) toggleSector(s) }} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:6, border:'none', background: selected ? 'var(--secondary-light)' : 'transparent', color: selected ? 'var(--secondary)' : disabled ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: selected ? 700 : 400, fontSize:12.5, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
+                    <button key={s} type="button" onClick={() => { if (!disabled) toggleSector(s) }} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:6, border:'none', background: selected ? 'var(--secondary-light)' : 'transparent', color: selected ? 'var(--secondary)' : disabled ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: selected ? 700 : 400, fontSize:12.5, cursor: disabled ? 'not-allPending' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
                       <span>{s}</span>
                       {selected && <span style={{ fontSize:11, color:'var(--secondary)' }}>✓</span>}
                     </button>
@@ -222,7 +222,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
                 const selected = safeSocieties.includes(soc)
                 const disabled = !selected && safeSocieties.length >= 5
                 return (
-                  <button key={soc} type="button" onClick={() => !disabled && toggleSociety(soc)} style={{ padding:'3px 10px', borderRadius:20, border:`1.5px solid ${selected ? 'var(--secondary)' : 'var(--border)'}`, background: selected ? 'var(--secondary-light)' : 'var(--surface)', color: selected ? 'var(--secondary)' : disabled ? 'var(--text-muted)' : 'var(--text-secondary)', fontWeight: selected ? 700 : 400, fontSize:11.5, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1, transition:'all 0.12s' }}>
+                  <button key={soc} type="button" onClick={() => !disabled && toggleSociety(soc)} style={{ padding:'3px 10px', borderRadius:20, border:`1.5px solid ${selected ? 'var(--secondary)' : 'var(--border)'}`, background: selected ? 'var(--secondary-light)' : 'var(--surface)', color: selected ? 'var(--secondary)' : disabled ? 'var(--text-muted)' : 'var(--text-secondary)', fontWeight: selected ? 700 : 400, fontSize:11.5, cursor: disabled ? 'not-allPending' : 'pointer', opacity: disabled ? 0.5 : 1, transition:'all 0.12s' }}>
                     {selected && '✓ '}{soc}
                   </button>
                 )

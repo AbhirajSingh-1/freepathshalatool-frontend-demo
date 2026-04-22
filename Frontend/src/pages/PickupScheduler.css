@@ -85,7 +85,7 @@
 
 .scheduler-ui .scheduler-primary-button:disabled,
 .scheduler-ui .scheduler-secondary-button:disabled {
-  cursor: not-allowed;
+  cursor: not-allPending;
   opacity: 0.6;
 }
 

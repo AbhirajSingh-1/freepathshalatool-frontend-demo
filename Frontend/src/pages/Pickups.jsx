@@ -794,7 +794,7 @@ const rateChart      = selectedpickuppartner?.rateChart || null
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Pickup Date <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--info)', marginLeft: 6 }}>🔒 Today only</span></label>
-                <input type="date" value={todayStr()} readOnly style={{ background: 'var(--bg)', cursor: 'not-allowed', color: 'var(--text-muted)', fontWeight: 600 }} />
+                <input type="date" value={todayStr()} readOnly style={{ background: 'var(--bg)', cursor: 'not-allPending', color: 'var(--text-muted)', fontWeight: 600 }} />
               </div>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Mode</label>
