@@ -1,12 +1,9 @@
 // Frontend/src/pages/Payments.jsx
-// v2 CHANGES:
-// • RecordPaymentModal redesigned: compact single-screen, no scroll, 2-click flow
-// • Amount + Date on one row
-// • Compact method pills (icon + label)
-// • Reference input only shown for non-cash
-// • Notes as single-line input
-// • Footer: Cancel + Record button always visible
-// • All other functionality unchanged
+// ENHANCED:
+// • New "SKS Payment Analytics" tab — shows SKS dispatch payment records
+// • UPI screenshot thumbnails in pickup partner payment history
+// • "View Proofs" per partner — inline collapsible screenshot gallery
+// • All images stay attached to their transaction (no separate gallery)
 
 import { useMemo, useState, useCallback } from 'react'
 import {
@@ -15,6 +12,7 @@ import {
   Plus, Search, Smartphone, Upload, X, Hash, MapPin,
   ChevronDown, ChevronUp, Truck, Clock,
   Phone, Filter, Lock, RefreshCw, Package,
+  Eye, ShoppingBag, Gift,
 } from 'lucide-react'
 import { useApp }  from '../context/AppContext'
 import { useRole } from '../context/RoleContext'
@@ -77,9 +75,45 @@ function buildMonthlyBreakdown(pickups) {
     map[key].paid    += paid
     map[key].pending += Math.max(0, total - paid)
   })
-  return Object.entries(map)
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([, v]) => v)
+  return Object.entries(map).sort(([a], [b]) => b.localeCompare(a)).map(([, v]) => v)
+}
+
+// ── Image viewer helper ───────────────────────────────────────────────────────
+function openImageInTab(src, title = 'Payment Proof') {
+  const win = window.open('', '_blank')
+  win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;}</style></head><body><img src="${src}" style="max-width:100vw;max-height:100vh;object-fit:contain;"/></body></html>`)
+  win.document.close()
+}
+
+// ── Screenshot thumbnail ──────────────────────────────────────────────────────
+function ScreenshotThumb({ src, label = 'Payment Proof', size = 48 }) {
+  if (!src) return null
+  return (
+    <div
+      onClick={() => openImageInTab(src, label)}
+      title="Click to view full image"
+      style={{
+        cursor: 'pointer', width: size, height: size,
+        borderRadius: 7, overflow: 'hidden',
+        border: '2px solid var(--secondary)', flexShrink: 0,
+        position: 'relative', background: 'var(--bg)',
+        display: 'inline-block',
+      }}
+    >
+      <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: 0, transition: 'opacity 0.15s',
+      }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+      >
+        <Eye size={14} color="white" />
+      </div>
+    </div>
+  )
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -110,6 +144,7 @@ function PayBadge({ status }) {
     'Received':        { bg: 'var(--secondary-light)',  color: 'var(--secondary)' },
     'Yet to Receive':  { bg: 'var(--warning-bg)',       color: '#92400E'         },
     'Write-off':       { bg: 'var(--border-light)',     color: 'var(--text-muted)' },
+    'Not Recorded':    { bg: 'var(--border-light)',     color: 'var(--text-muted)' },
   }
   const c = MAP[status] || { bg: 'var(--border-light)', color: 'var(--text-muted)' }
   return (
@@ -136,7 +171,6 @@ function StatusDot({ status }) {
   )
 }
 
-// ── Compact method pill picker (new design) ───────────────────────────────────
 function CompactMethodPicker({ value, onChange }) {
   return (
     <div style={{ display: 'flex', gap: 6 }}>
@@ -144,10 +178,7 @@ function CompactMethodPicker({ value, onChange }) {
         const Icon = mode.icon
         const active = value === mode.value
         return (
-          <button
-            key={mode.value}
-            type="button"
-            onClick={() => onChange(mode.value)}
+          <button key={mode.value} type="button" onClick={() => onChange(mode.value)}
             style={{
               flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
               gap: 4, padding: '8px 4px', borderRadius: 9, cursor: 'pointer',
@@ -156,8 +187,7 @@ function CompactMethodPicker({ value, onChange }) {
               color: active ? 'var(--primary)' : 'var(--text-muted)',
               fontWeight: active ? 700 : 400, fontSize: 11.5,
               transition: 'all 0.12s',
-            }}
-          >
+            }}>
             <Icon size={15} />
             {mode.label}
           </button>
@@ -168,8 +198,7 @@ function CompactMethodPicker({ value, onChange }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// REDESIGNED RECORD PAYMENT MODAL
-// Compact single-screen, no scroll, 2-click flow
+// RECORD PAYMENT MODAL
 // ══════════════════════════════════════════════════════════════════════════════
 function RecordPaymentModal({ context, onClose, onSave, saving }) {
   const [amount,     setAmount]     = useState(() => context.pending > 0 ? String(Math.round(context.pending)) : '')
@@ -211,13 +240,8 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal" style={{ maxWidth: 440, width: '95vw' }}>
-
-        {/* ── Compact Header ── */}
         <div className="modal-header" style={{ padding: '13px 18px' }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 8, background: 'var(--primary-light)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-          }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <IndianRupee size={16} color="var(--primary)" />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -232,40 +256,25 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
           <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}><X size={15}/></button>
         </div>
 
-        {/* ── Balance row (compact 3-col) ── */}
         <div style={{ display: 'flex', background: 'var(--surface-alt)', borderTop: '1px solid var(--border-light)', borderBottom: '1px solid var(--border-light)' }}>
           {[
             { label: 'Total',   val: money(context.total),   color: 'var(--primary)' },
             { label: 'Paid',    val: money(context.paid),    color: 'var(--secondary)' },
             { label: 'Pending', val: money(context.pending), color: statusColor },
           ].map((item, i) => (
-            <div key={item.label} style={{
-              flex: 1, textAlign: 'center', padding: '10px 4px',
-              borderLeft: i > 0 ? '1px solid var(--border-light)' : 'none',
-            }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: item.color, lineHeight: 1 }}>
-                {item.val}
-              </div>
-              <div style={{ fontSize: 9.5, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginTop: 3 }}>
-                {item.label}
-              </div>
+            <div key={item.label} style={{ flex: 1, textAlign: 'center', padding: '10px 4px', borderLeft: i > 0 ? '1px solid var(--border-light)' : 'none' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: item.color, lineHeight: 1 }}>{item.val}</div>
+              <div style={{ fontSize: 9.5, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, marginTop: 3 }}>{item.label}</div>
             </div>
           ))}
         </div>
 
-        {/* Collection progress bar */}
         {context.total > 0 && (
           <div style={{ height: 3, background: 'var(--border-light)' }}>
-            <div style={{
-              height: '100%',
-              width: `${Math.min(100, collPct)}%`,
-              background: collPct >= 80 ? 'var(--secondary)' : collPct >= 40 ? 'var(--warning)' : 'var(--danger)',
-              transition: 'width 0.4s ease',
-            }} />
+            <div style={{ height: '100%', width: `${Math.min(100, collPct)}%`, background: collPct >= 80 ? 'var(--secondary)' : collPct >= 40 ? 'var(--warning)' : 'var(--danger)', transition: 'width 0.4s ease' }} />
           </div>
         )}
 
-        {/* ── Fully paid state ── */}
         {context.pending <= 0 ? (
           <div style={{ padding: '28px 18px', textAlign: 'center' }}>
             <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--secondary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
@@ -275,35 +284,19 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
             <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>No pending balance for this entry.</div>
           </div>
         ) : (
-          /* ── Compact form ── */
           <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 13 }}>
-
-            {/* Amount + Date — same row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 10 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label style={{ fontSize: 11.5 }}>
                   Amount (₹) <span className="required">*</span>
-                  {isFull && (
-                    <span style={{ marginLeft: 5, fontSize: 10, color: 'var(--secondary)', fontWeight: 700, background: 'var(--secondary-light)', padding: '1px 7px', borderRadius: 20 }}>
-                      Full Balance ✓
-                    </span>
-                  )}
+                  {isFull && <span style={{ marginLeft: 5, fontSize: 10, color: 'var(--secondary)', fontWeight: 700, background: 'var(--secondary-light)', padding: '1px 7px', borderRadius: 20 }}>Full Balance ✓</span>}
                 </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={context.pending}
-                  inputMode="decimal"
-                  value={amount}
-                  onChange={e => { setAmount(e.target.value); setError('') }}
-                  placeholder={`Max ${money(context.pending)}`}
-                  autoFocus
-                  style={{ fontWeight: 700, fontSize: 14, borderColor: entered > 0 ? 'var(--primary)' : undefined }}
-                />
+                <input type="number" min={0} max={context.pending} inputMode="decimal"
+                  value={amount} onChange={e => { setAmount(e.target.value); setError('') }}
+                  placeholder={`Max ${money(context.pending)}`} autoFocus
+                  style={{ fontWeight: 700, fontSize: 14, borderColor: entered > 0 ? 'var(--primary)' : undefined }} />
                 {entered > 0 && afterPay > 0 && (
-                  <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 3, fontWeight: 600 }}>
-                    Remaining after: {money(afterPay)}
-                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--warning)', marginTop: 3, fontWeight: 600 }}>Remaining after: {money(afterPay)}</div>
                 )}
               </div>
               <div className="form-group" style={{ margin: 0 }}>
@@ -312,32 +305,23 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
               </div>
             </div>
 
-            {/* Method */}
             <div>
               <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 7 }}>
                 Payment Method <span className="required">*</span>
               </label>
-              <CompactMethodPicker
-                value={method}
-                onChange={m => { setMethod(m); setReference(''); setScreenshot(null); setError('') }}
-              />
+              <CompactMethodPicker value={method} onChange={m => { setMethod(m); setReference(''); setScreenshot(null); setError('') }} />
             </div>
 
-            {/* Reference — only for non-cash */}
             {hasRef && (
               <div className="form-group" style={{ margin: 0 }}>
                 <label style={{ fontSize: 11.5 }}>
                   {REF_LABELS[method]} <span className="required">*</span>
                 </label>
-                <input
-                  value={reference}
-                  onChange={e => { setReference(e.target.value); setError('') }}
-                  placeholder={REF_MODES.find(r => r.value === method)?.placeholder || 'Reference'}
-                />
+                <input value={reference} onChange={e => { setReference(e.target.value); setError('') }}
+                  placeholder={REF_MODES.find(r => r.value === method)?.placeholder || 'Reference'} />
               </div>
             )}
 
-            {/* UPI Screenshot — compact */}
             {method === 'upi' && (
               <div>
                 <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
@@ -345,11 +329,15 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
                   <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
                 </label>
                 {screenshot ? (
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <img src={screenshot} alt="UPI" style={{ width: 52, height: 52, borderRadius: 7, objectFit: 'cover', border: '1px solid var(--border)' }} />
-                    <button type="button" onClick={() => setScreenshot(null)} style={{ fontSize: 11.5, color: 'var(--danger)', background: 'var(--danger-bg)', border: '1px solid var(--danger)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontWeight: 600 }}>
-                      Remove
-                    </button>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                    <ScreenshotThumb src={screenshot} label="UPI Proof" />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--secondary)', marginBottom: 4 }}>Screenshot attached ✓</div>
+                      <button type="button" onClick={() => setScreenshot(null)}
+                        style={{ fontSize: 11.5, color: 'var(--danger)', background: 'var(--danger-bg)', border: '1px solid var(--danger)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <label className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', cursor: 'pointer', padding: '7px' }}>
@@ -360,20 +348,11 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
               </div>
             )}
 
-            {/* Notes — single-line input (not textarea) */}
             <div className="form-group" style={{ margin: 0 }}>
-              <label style={{ fontSize: 11.5 }}>
-                Notes
-                <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 5 }}>(optional)</span>
-              </label>
-              <input
-                value={notes}
-                onChange={e => setNotes(e.target.value)}
-                placeholder="Any remarks about this payment…"
-              />
+              <label style={{ fontSize: 11.5 }}>Notes <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 5 }}>(optional)</span></label>
+              <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any remarks about this payment…" />
             </div>
 
-            {/* Error */}
             {error && (
               <div style={{ fontSize: 12, color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'var(--danger-bg)', borderRadius: 8 }}>
                 <AlertCircle size={14} style={{ flexShrink: 0 }} />{error}
@@ -382,25 +361,14 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
           </div>
         )}
 
-        {/* ── Footer — always visible ── */}
         <div className="modal-footer" style={{ padding: '12px 18px', gap: 8 }}>
-          <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1 }}>
-            Cancel
-          </button>
+          <button className="btn btn-ghost" onClick={onClose} style={{ flex: 1 }}>Cancel</button>
           {context.pending > 0 && (
-            <button
-              className="btn btn-primary"
-              onClick={handleSave}
-              disabled={saving || entered <= 0}
-              style={{ flex: 2, fontWeight: 700, fontSize: 13.5, justifyContent: 'center' }}
-            >
+            <button className="btn btn-primary" onClick={handleSave} disabled={saving || entered <= 0}
+              style={{ flex: 2, fontWeight: 700, fontSize: 13.5, justifyContent: 'center' }}>
               {saving ? (
                 <><span className="spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%' }} /> Saving…</>
-              ) : isFull ? (
-                '✓ Clear Full Balance'
-              ) : (
-                `Record ${entered > 0 ? money(entered) : 'Payment'}`
-              )}
+              ) : isFull ? '✓ Clear Full Balance' : `Record ${entered > 0 ? money(entered) : 'Payment'}`}
             </button>
           )}
         </div>
@@ -438,46 +406,20 @@ function WriteOffModal({ context, onClose, onConfirm, saving }) {
               {isPartnerLevel ? `${context.partnerName} — all unpaid pickups` : `${context.donorName} · ${context.pickupId}`}
             </div>
           </div>
-          <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: 'auto' }} onClick={onClose}>
-            <X size={16} />
-          </button>
+          <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: 'auto' }} onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
           <div style={{ padding: '16px', borderRadius: 10, marginBottom: 20, background: 'var(--danger-bg)', border: '1.5px solid rgba(239,68,68,0.25)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-              {isPartnerLevel ? 'Partner Write-Off Summary' : 'Entry Write-Off Summary'}
-            </div>
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 600, opacity: 0.7, marginBottom: 2 }}>AMOUNT TO WRITE OFF</div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: 'var(--danger)' }}>{money(context.pending)}</div>
-              </div>
-              {isPartnerLevel && (
-                <div>
-                  <div style={{ fontSize: 10, color: 'var(--danger)', fontWeight: 600, opacity: 0.7, marginBottom: 2 }}>AFFECTED PICKUPS</div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: 'var(--danger)' }}>{context.pickupCount}</div>
-                </div>
-              )}
-            </div>
-          </div>
-          <div style={{ padding: '12px 14px', background: 'var(--surface-alt)', borderRadius: 8, border: '1px solid var(--border-light)', marginBottom: 20, fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            {isPartnerLevel ? (
-              <><div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>This will:</div>
-                <div>• Mark all pending pickups for <strong>{context.partnerName}</strong> as Write Off</div>
-                <div>• Close all unpaid balances ({money(context.pending)})</div>
-                <div>• <strong>No money will be recorded as received</strong></div></>
-            ) : (
-              <><div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>This will:</div>
-                <div>• Write off <strong>{money(context.pending)}</strong> pending for this specific pickup</div>
-                <div>• <strong>Only this entry</strong> is affected — other pickups are unchanged</div>
-                <div>• No money will be recorded as received</div></>
-            )}
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--danger)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Write-Off Summary</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 800, color: 'var(--danger)' }}>{money(context.pending)}</div>
           </div>
           <div className="form-group" style={{ margin: '0 0 16px' }}>
-            <label>Reason for Write-Off <span className="required">*</span><span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>(required)</span></label>
-            <textarea value={reason} onChange={e => { setReason(e.target.value); setError('') }} placeholder="e.g. Partner unreachable, amount disputed…" style={{ minHeight: 76 }} autoFocus />
+            <label>Reason for Write-Off <span className="required">*</span></label>
+            <textarea value={reason} onChange={e => { setReason(e.target.value); setError('') }}
+              placeholder="e.g. Partner unreachable, amount disputed…" style={{ minHeight: 76 }} autoFocus />
           </div>
-          <div style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', border: `1.5px solid ${confirmed ? 'var(--danger)' : 'var(--border)'}`, background: confirmed ? 'var(--danger-bg)' : 'var(--surface)', display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12, transition: 'all 0.15s' }} onClick={() => { setConfirmed(c => !c); setError('') }}>
+          <div style={{ padding: '12px 14px', borderRadius: 10, cursor: 'pointer', border: `1.5px solid ${confirmed ? 'var(--danger)' : 'var(--border)'}`, background: confirmed ? 'var(--danger-bg)' : 'var(--surface)', display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 12, transition: 'all 0.15s' }}
+            onClick={() => { setConfirmed(c => !c); setError('') }}>
             <input type="checkbox" checked={confirmed} onChange={() => {}} style={{ width: 16, height: 16, accentColor: 'var(--danger)', flexShrink: 0, marginTop: 2, cursor: 'pointer', padding: 0, border: 'none' }} />
             <div style={{ fontSize: 12.5, color: confirmed ? 'var(--danger)' : 'var(--text-secondary)', fontWeight: confirmed ? 700 : 400 }}>
               I understand this is final. The written-off amount ({money(context.pending)}) will be permanently marked as non-recoverable.
@@ -497,16 +439,25 @@ function WriteOffModal({ context, onClose, onConfirm, saving }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PAYMENT HISTORY MODAL (unchanged)
+// PAYMENT HISTORY MODAL — enhanced with screenshot display
 // ══════════════════════════════════════════════════════════════════════════════
 function HistoryModal({ partner, onClose }) {
   const entries = (partner.history || []).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  const proofCount = entries.filter(e => e.screenshot).length
+
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal" style={{ maxWidth: 580 }}>
+      <div className="modal" style={{ maxWidth: 600 }}>
         <div className="modal-header">
           <History size={18} color="var(--info)" />
-          <div className="modal-title">Payment History — {partner.partnerName}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="modal-title">Payment History — {partner.partnerName}</div>
+            {proofCount > 0 && (
+              <div style={{ fontSize: 11.5, color: 'var(--info)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Image size={10} /> {proofCount} payment proof{proofCount !== 1 ? 's' : ''} attached
+              </div>
+            )}
+          </div>
           <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: 'auto' }} onClick={onClose}><X size={16} /></button>
         </div>
         <div className="modal-body">
@@ -529,6 +480,25 @@ function HistoryModal({ partner, onClose }) {
                   {e.donorName || '—'}{e.refValue ? ` — Ref: ${e.refValue}` : ''}
                 </div>
                 {e.notes && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>{e.notes}</div>}
+
+                {/* ── Screenshot attached to this transaction ── */}
+                {e.screenshot && (
+                  <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ScreenshotThumb
+                      src={e.screenshot}
+                      label={`Payment Proof — ${e.donorName || ''} ${e.orderId || ''}`}
+                      size={52}
+                    />
+                    <div>
+                      <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--secondary)', marginBottom: 3 }}>UPI Proof attached</div>
+                      <button
+                        onClick={() => openImageInTab(e.screenshot, `Payment Proof — ${partner.partnerName}`)}
+                        style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid var(--secondary)', background: 'var(--secondary-light)', cursor: 'pointer', color: 'var(--secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Eye size={10} /> View Full Image
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', flexShrink: 0 }}>{fmtDate(e.date)}</div>
             </div>
@@ -541,7 +511,7 @@ function HistoryModal({ partner, onClose }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MONTHLY BREAKDOWN TABLE (unchanged)
+// MONTHLY BREAKDOWN TABLE
 // ══════════════════════════════════════════════════════════════════════════════
 function MonthlyBreakdown({ pickups }) {
   const months = useMemo(() => buildMonthlyBreakdown(pickups), [pickups])
@@ -590,7 +560,7 @@ function MonthlyBreakdown({ pickups }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PICKUP LEDGER (unchanged)
+// PICKUP LEDGER
 // ══════════════════════════════════════════════════════════════════════════════
 function PickupLedger({ pickups, onRecordPayment, onWriteOffEntry, canWriteOff, sortKey, setSortKey, sortDir, setSortDir, search, setSearch }) {
   const enriched = useMemo(() => {
@@ -698,15 +668,9 @@ function PickupLedger({ pickups, onRecordPayment, onWriteOffEntry, canWriteOff, 
                         <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{r.sector || ''}</div>
                       </td>
                       <td style={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{fmtDate(r.date)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 800, color: r._total > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
-                        {r._total > 0 ? money(r._total) : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700, color: r._paid > 0 ? 'var(--secondary)' : 'var(--text-muted)' }}>
-                        {r._paid > 0 ? money(r._paid) : '—'}
-                      </td>
-                      <td style={{ textAlign: 'right', fontWeight: 800, color: r._pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
-                        {r._pending > 0 ? money(r._pending) : '—'}
-                      </td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: r._total > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>{r._total > 0 ? money(r._total) : '—'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700, color: r._paid > 0 ? 'var(--secondary)' : 'var(--text-muted)' }}>{r._paid > 0 ? money(r._paid) : '—'}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: r._pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>{r._pending > 0 ? money(r._pending) : '—'}</td>
                       <td>
                         {isPending && r._pending > 0 ? (
                           <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
@@ -788,13 +752,14 @@ function PickupLedger({ pickups, onRecordPayment, onWriteOffEntry, canWriteOff, 
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PARTNER CARD (unchanged)
+// PARTNER CARD — enhanced with View Proofs
 // ══════════════════════════════════════════════════════════════════════════════
 function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPartner, onViewHistory, canWriteOff }) {
-  const [open,      setOpen]      = useState(false)
-  const [sortKey,   setSortKey]   = useState('date')
-  const [sortDir,   setSortDir]   = useState('desc')
-  const [ledSearch, setLedSearch] = useState('')
+  const [open,          setOpen]          = useState(false)
+  const [showProofs,    setShowProofs]    = useState(false)
+  const [sortKey,       setSortKey]       = useState('date')
+  const [sortDir,       setSortDir]       = useState('desc')
+  const [ledSearch,     setLedSearch]     = useState('')
 
   const statusCounts = useMemo(() => {
     const c = { 'Not Paid': 0, 'Partially Paid': 0, 'Paid': 0, 'Write Off': 0 }
@@ -803,6 +768,26 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
       c[ps] = (c[ps] || 0) + 1
     })
     return c
+  }, [partner.records])
+
+  // Collect all payment proofs for this partner
+  const allProofs = useMemo(() => {
+    const proofs = []
+    partner.records.forEach(p => {
+      ;(p.payHistory || []).forEach(h => {
+        if (h.screenshot) {
+          proofs.push({
+            screenshot: h.screenshot,
+            date: h.date,
+            amount: h.amount,
+            orderId: p.orderId || p.id,
+            donorName: p.donorName,
+            refMode: h.refMode,
+          })
+        }
+      })
+    })
+    return proofs.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
   }, [partner.records])
 
   const urgentCount = (statusCounts['Not Paid'] || 0) + (statusCounts['Partially Paid'] || 0)
@@ -821,6 +806,11 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
               {urgentCount > 0 && (
                 <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid rgba(239,68,68,0.2)' }}>
                   ⚠ {urgentCount} pending
+                </span>
+              )}
+              {allProofs.length > 0 && (
+                <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 20, background: 'var(--info-bg)', color: 'var(--info)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Image size={9} /> {allProofs.length} proof{allProofs.length !== 1 ? 's' : ''}
                 </span>
               )}
             </div>
@@ -874,6 +864,12 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
         <button className="btn btn-ghost btn-sm" onClick={() => onViewHistory(partner)} style={{ fontSize: 12 }}>
           <History size={12} /> History
         </button>
+        {allProofs.length > 0 && (
+          <button className={`btn btn-sm ${showProofs ? 'btn-outline' : 'btn-ghost'}`} onClick={() => setShowProofs(s => !s)} style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Image size={12} color={showProofs ? 'var(--info)' : undefined} />
+            {showProofs ? 'Hide Proofs' : `View Proofs (${allProofs.length})`}
+          </button>
+        )}
         <button className={`btn btn-sm ${open ? 'btn-outline' : 'btn-ghost'}`} onClick={() => setOpen(o => !o)} style={{ fontSize: 12 }}>
           {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
           {open ? 'Collapse' : 'View Pickups'}
@@ -895,6 +891,29 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
           </div>
         )}
       </div>
+
+      {/* ── View Proofs Panel ── */}
+      {showProofs && allProofs.length > 0 && (
+        <div style={{ borderTop: '1px solid var(--border-light)', padding: '16px 20px', background: 'linear-gradient(135deg, rgba(59,130,246,0.04), var(--surface))' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--info)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Image size={12} /> Payment Proofs — {allProofs.length} screenshot{allProofs.length !== 1 ? 's' : ''}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            {allProofs.map((proof, i) => (
+              <div key={i} style={{ display: 'flex', gap: 10, padding: '10px 14px', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border-light)', alignItems: 'flex-start', minWidth: 220, flex: '0 0 auto' }}>
+                <ScreenshotThumb src={proof.screenshot} label={`Proof — ${proof.donorName || 'Unknown'} (${proof.orderId || ''})`} size={56} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--secondary)', marginBottom: 2 }}>{money(proof.amount)}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 2 }}>{fmtDate(proof.date)}</div>
+                  {proof.donorName && <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginBottom: 2 }} className="truncate">{proof.donorName}</div>}
+                  {proof.orderId && <OrderIdChip id={proof.orderId} />}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {open && (
         <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-light)', background: 'var(--surface)' }}>
           <MonthlyBreakdown pickups={partner.records} />
@@ -926,7 +945,7 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PARTNER PAYMENT HUB (unchanged logic)
+// PARTNER PAYMENT HUB
 // ══════════════════════════════════════════════════════════════════════════════
 function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment, clearPartnerBalance }) {
   const { role } = useRole()
@@ -935,14 +954,14 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
   const [datePreset,   setDatePreset]   = useState('all')
   const [customFrom,   setCustomFrom]   = useState('')
   const [customTo,     setCustomTo]     = useState('')
-  const [filterpickuppartner,    setFilterpickuppartner]    = useState('All')
+  const [filterpickuppartner, setFilterpickuppartner] = useState('All')
   const [filterStatus, setFilterStatus] = useState('All')
   const [globalSearch, setGlobalSearch] = useState('')
 
-  const [payContext,    setPayContext]    = useState(null)
-  const [writeOffCtx,  setWriteOffCtx]  = useState(null)
-  const [histPartner,   setHistPartner]  = useState(null)
-  const [saving,        setSaving]       = useState(false)
+  const [payContext,   setPayContext]   = useState(null)
+  const [writeOffCtx,  setWriteOffCtx] = useState(null)
+  const [histPartner,  setHistPartner] = useState(null)
+  const [saving,       setSaving]      = useState(false)
 
   const { from: dateFrom, to: dateTo } = useMemo(
     () => getDateRange(datePreset, customFrom, customTo),
@@ -1080,21 +1099,7 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
         </div>
       </div>
 
-      {canWriteOff && (
-        <div style={{ padding: '9px 14px', marginBottom: 16, background: 'rgba(239,68,68,0.04)', borderRadius: 8, border: '1px solid rgba(239,68,68,0.15)', fontSize: 12, color: 'var(--text-secondary)', display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-          <AlertTriangle size={14} color="var(--danger)" style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>
-            <strong style={{ color: 'var(--danger)' }}>Write-Off Access Enabled</strong>
-            <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>
-              <strong>Write Off</strong> on a row = only that pickup is closed.
-              <span style={{ margin: '0 6px' }}>·</span>
-              <strong>Write Off All</strong> on a partner card = all their pending entries are closed.
-            </span>
-          </div>
-        </div>
-      )}
-
-      <div style={{ marginBottom: 16, padding: '8px 14px', background: 'linear-gradient(135deg, rgba(27,94,53,0.06), rgba(232,82,26,0.06))', borderRadius: 8, border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ marginBottom: 16, padding: '9px 14px', background: 'linear-gradient(135deg, rgba(27,94,53,0.06), rgba(232,82,26,0.06))', borderRadius: 8, border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <RefreshCw size={12} color="var(--secondary)" />
         <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 600 }}>
           Live sync — changes here reflect in Dashboard, Raddi Master &amp; RST Analytics
@@ -1173,7 +1178,7 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// RST REVENUE ANALYTICS (unchanged)
+// RST REVENUE ANALYTICS
 // ══════════════════════════════════════════════════════════════════════════════
 function RSTAnalytics({ raddiRecords, pickups }) {
   const [datePreset,   setDatePreset]   = useState('all')
@@ -1335,27 +1340,6 @@ function RSTAnalytics({ raddiRecords, pickups }) {
               </tfoot>
             </table>
           </div>
-          <div className="mobile-cards">
-            {filtered.map(r => (
-              <div key={r.orderId || r.pickupId} className="card" style={{ marginBottom: 10, padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
-                  <div>
-                    <div style={{ fontWeight: 800, fontSize: 14 }}>{r.partnerName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.donorName || '—'}</div>
-                    <OrderIdChip id={r.orderId || r.pickupId} />
-                  </div>
-                  <PayBadge status={r.paymentStatus} />
-                </div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{[r.society, r.sector, r.city].filter(Boolean).join(', ')}</div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12.5, alignItems: 'center' }}>
-                  <span style={{ color: 'var(--text-muted)' }}>{fmtDate(r.pickupDate)}</span>
-                  <span style={{ color: 'var(--primary)', fontWeight: 800 }}>{money(r.total)}</span>
-                  {r.collected > 0 && <span style={{ color: 'var(--secondary)', fontWeight: 700 }}>Paid {money(r.collected)}</span>}
-                  {r.pending > 0 && <span style={{ color: 'var(--danger)', fontWeight: 700 }}>Due {money(r.pending)}</span>}
-                </div>
-              </div>
-            ))}
-          </div>
         </>
       )}
     </div>
@@ -1363,50 +1347,258 @@ function RSTAnalytics({ raddiRecords, pickups }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MAIN PAYMENTS PAGE
+// SKS PAYMENT ANALYTICS — New tab
 // ══════════════════════════════════════════════════════════════════════════════
-export default function Payments() {
-  const { pickups, raddiRecords, PickupPartners, recordPickupPartnerPayment, clearPartnerBalance } = useApp()
-  const { role } = useRole()
-  const [view, setView] = useState('partners')
+function SKSPaymentAnalytics() {
+  const { sksOutflows } = useApp()
 
-  if (role === 'executive') {
+  const [datePreset,   setDatePreset]   = useState('all')
+  const [customFrom,   setCustomFrom]   = useState('')
+  const [customTo,     setCustomTo]     = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
+  const [filterMethod, setFilterMethod] = useState('')
+  const [search,       setSearch]       = useState('')
+  const [sortKey,      setSortKey]      = useState('date')
+  const [sortDir,      setSortDir]      = useState('desc')
+
+  const { from: dateFrom, to: dateTo } = useMemo(() => getDateRange(datePreset, customFrom, customTo), [datePreset, customFrom, customTo])
+
+  const enriched = useMemo(() => (sksOutflows || []).map(r => {
+    const pay = r.payment || {}
+    const paid = Number(pay.amount) || 0
+    const total = Number(pay.totalValue) || 0
+    return {
+      ...r,
+      _paid:   paid,
+      _total:  total,
+      _pending: Math.max(0, total - paid),
+      _status: pay.status || (total === 0 ? 'Not Recorded' : paid >= total ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Not Paid'),
+      _method: (pay.method || 'cash').toUpperCase(),
+      _screenshot: pay.screenshot || null,
+    }
+  }), [sksOutflows])
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    return enriched.filter(r => {
+      const inDate   = (!dateFrom || (r.date || '') >= dateFrom) && (!dateTo || (r.date || '') <= dateTo)
+      const inStatus = !filterStatus || r._status === filterStatus
+      const inMethod = !filterMethod || r._method === filterMethod.toUpperCase()
+      const inSearch = !q || (r.partnerName || '').toLowerCase().includes(q) || (r.id || '').toLowerCase().includes(q) || (r.payment?.reference || '').toLowerCase().includes(q)
+      return inDate && inStatus && inMethod && inSearch
+    }).sort((a, b) => {
+      const av = a[sortKey] ?? '', bv = b[sortKey] ?? ''
+      if (['_paid', '_total', '_pending'].includes(sortKey)) return sortDir === 'asc' ? Number(av) - Number(bv) : Number(bv) - Number(av)
+      return sortDir === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av))
+    })
+  }, [enriched, dateFrom, dateTo, filterStatus, filterMethod, search, sortKey, sortDir])
+
+  const kpis = useMemo(() => ({
+    totalValue:   filtered.reduce((s, r) => s + r._total, 0),
+    totalPaid:    filtered.reduce((s, r) => s + r._paid, 0),
+    totalPending: filtered.reduce((s, r) => s + r._pending, 0),
+    totalItems:   filtered.reduce((s, r) => s + (r.items || []).reduce((a, it) => a + it.qty, 0), 0),
+    proofCount:   filtered.filter(r => r._screenshot).length,
+  }), [filtered])
+
+  const toggleSort = (key) => { setSortDir(d => sortKey === key ? (d === 'asc' ? 'desc' : 'asc') : 'desc'); setSortKey(key) }
+  const SortTh = ({ k, children, align }) => (
+    <th onClick={() => toggleSort(k)} style={{ cursor: 'pointer', userSelect: 'none', textAlign: align || 'left' }}>
+      {children}<span style={{ marginLeft: 4, opacity: sortKey === k ? 0.7 : 0.2 }}>{sortKey === k ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}</span>
+    </th>
+  )
+
+  const handleExport = () => {
+    exportToExcel(filtered.map(r => ({
+      'Dispatch ID': r.id,
+      'Date': r.date,
+      'Recipient': r.partnerName || '—',
+      'Phone': r.partnerPhone || '—',
+      'Items': (r.items || []).map(it => `${it.name} ×${it.qty}`).join(', '),
+      'Total Items': (r.items || []).reduce((s, it) => s + it.qty, 0),
+      'Goods Value (₹)': r._total || '',
+      'Amount Received (₹)': r._paid,
+      'Pending (₹)': r._pending,
+      'Payment Method': r._method,
+      'Reference': r.payment?.reference || '',
+      'Payment Status': r._status,
+      'Has Screenshot': r._screenshot ? 'Yes' : 'No',
+      'Notes': r.notes || r.payment?.notes || '',
+    })), 'SKS_Payment_Analytics')
+  }
+
+  if (sksOutflows.length === 0) {
     return (
-      <div className="page-body" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <div className="empty-state">
-          <div className="empty-icon" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }}>
-            <Lock size={24} />
+      <div>
+        <div className="empty-state" style={{ padding: 80 }}>
+          <div className="empty-icon" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>
+            <Gift size={28} />
           </div>
-          <h3>Access Restricted</h3>
-          <p>Payment Tracking is available to Managers and Admins only.</p>
+          <h3>No SKS Dispatches Yet</h3>
+          <p>Dispatch goods from the SKS Stock page to see payment analytics here. Payments recorded during dispatch appear automatically.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="page-body">
-      <div style={{ marginBottom: 24 }}>
-        <div className="tabs" style={{ marginBottom: 0 }}>
-          <button className={`tab ${view === 'partners' ? 'active' : ''}`} onClick={() => setView('partners')}>
-            <IndianRupee size={13} style={{ marginRight: 4 }} /> Pickup Partner Payments
-          </button>
-          <button className={`tab ${view === 'analytics' ? 'active' : ''}`} onClick={() => setView('analytics')}>
-            <BarChart3 size={13} style={{ marginRight: 4 }} /> RST Revenue Analytics
+    <div>
+      {/* Info banner */}
+      <div style={{ marginBottom: 20, padding: '12px 16px', background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(27,94,53,0.06))', borderRadius: 'var(--radius)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <ShoppingBag size={18} color="var(--info)" style={{ flexShrink: 0, marginTop: 1 }} />
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--info)', marginBottom: 3 }}>SKS Payment Analytics</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            Tracks payments received against SKS goods dispatched from the warehouse. Each dispatch can include payment details and UPI screenshot proof.
+            {kpis.proofCount > 0 && <span style={{ color: 'var(--secondary)', fontWeight: 600 }}> · {kpis.proofCount} payment proof{kpis.proofCount !== 1 ? 's' : ''} attached</span>}
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="stat-grid" style={{ marginBottom: 20 }}>
+        <div className="stat-card blue">
+          <div className="stat-icon"><Package size={18} /></div>
+          <div className="stat-value">{filtered.length}</div>
+          <div className="stat-label">Total Dispatches</div>
+          <div className="stat-change up">{kpis.totalItems} total items</div>
+        </div>
+        <div className="stat-card orange">
+          <div className="stat-icon"><IndianRupee size={18} /></div>
+          <div className="stat-value">{fmtCurrency(kpis.totalValue)}</div>
+          <div className="stat-label">Total Goods Value</div>
+        </div>
+        <div className="stat-card green">
+          <div className="stat-icon"><CheckCircle size={18} /></div>
+          <div className="stat-value">{fmtCurrency(kpis.totalPaid)}</div>
+          <div className="stat-label">Amount Received</div>
+          <div className="stat-change up">
+            {kpis.totalValue > 0 ? `${Math.round((kpis.totalPaid / kpis.totalValue) * 100)}% collected` : 'N/A'}
+          </div>
+        </div>
+        <div className="stat-card red">
+          <div className="stat-icon"><AlertCircle size={18} /></div>
+          <div className="stat-value">{fmtCurrency(kpis.totalPending)}</div>
+          <div className="stat-label">Outstanding</div>
+        </div>
+      </div>
+
+      {/* Collection progress */}
+      {kpis.totalValue > 0 && (
+        <div style={{ marginBottom: 20, padding: '12px 16px', background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border-light)', boxShadow: 'var(--shadow)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, fontWeight: 600, marginBottom: 8, color: 'var(--text-secondary)' }}>
+            <span>Collection Progress</span>
+            <span style={{ color: 'var(--secondary)', fontWeight: 700 }}>{Math.round((kpis.totalPaid / kpis.totalValue) * 100)}%</span>
+          </div>
+          <div style={{ height: 8, background: 'var(--border-light)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', borderRadius: 4, width: `${Math.min(100, (kpis.totalPaid / kpis.totalValue) * 100)}%`, background: kpis.totalPending === 0 ? 'var(--secondary)' : kpis.totalPaid / kpis.totalValue > 0.7 ? 'var(--warning)' : 'var(--danger)', transition: 'width 0.5s ease' }} />
+          </div>
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 16, boxShadow: 'var(--shadow)' }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+          <Calendar size={13} color="var(--primary)" />
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Date:</span>
+          {DATE_PRESETS.map(p => (
+            <button key={p.id} className={`btn btn-sm ${datePreset === p.id ? 'btn-primary' : 'btn-ghost'}`} style={{ fontSize: 11.5 }} onClick={() => setDatePreset(p.id)}>{p.label}</button>
+          ))}
+          {datePreset === 'custom' && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} style={{ width: 138, fontSize: 12 }} />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>to</span>
+              <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} style={{ width: 138, fontSize: 12 }} />
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div style={{ position: 'relative', flex: '2 1 200px', minWidth: 0 }}>
+            <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search recipient, dispatch ID, reference…" style={{ paddingLeft: 32, fontSize: 12.5, width: '100%' }} />
+          </div>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ flex: '1 1 140px', fontSize: 12.5 }}>
+            <option value="">All Statuses</option>
+            <option value="Paid">Paid</option>
+            <option value="Partially Paid">Partially Paid</option>
+            <option value="Not Paid">Not Paid</option>
+            <option value="Not Recorded">Not Recorded</option>
+          </select>
+          <select value={filterMethod} onChange={e => setFilterMethod(e.target.value)} style={{ flex: '1 1 130px', fontSize: 12.5 }}>
+            <option value="">All Methods</option>
+            <option value="cash">Cash</option>
+            <option value="upi">UPI</option>
+            <option value="bank">Bank</option>
+            <option value="cheque">Cheque</option>
+          </select>
+          <button className="btn btn-ghost btn-sm" onClick={handleExport} style={{ flexShrink: 0 }}>
+            <Download size={13} /> Export
           </button>
         </div>
       </div>
-      {view === 'partners' && (
-        <PartnerPaymentHub
-          pickups={pickups}
-          PickupPartners={PickupPartners}
-          recordPickupPartnerPayment={recordPickupPartnerPayment}
-          clearPartnerBalance={clearPartnerBalance}
-        />
-      )}
-      {view === 'analytics' && (
-        <RSTAnalytics raddiRecords={raddiRecords} pickups={pickups} />
-      )}
-    </div>
-  )
-}
+
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 12 }}>
+        <strong style={{ color: 'var(--text-primary)' }}>{filtered.length}</strong> dispatches
+        {(search || filterStatus || filterMethod) && (
+          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, marginLeft: 8 }} onClick={() => { setSearch(''); setFilterStatus(''); setFilterMethod('') }}>
+            <X size={10} /> Clear
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      {filtered.length === 0 ? (
+        <div className="empty-state"><div className="empty-icon"><Package size={24} /></div><h3>No records match</h3><p>Try adjusting your filters.</p></div>
+      ) : (
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <SortTh k="id">Dispatch ID</SortTh>
+                  <SortTh k="date">Date</SortTh>
+                  <SortTh k="partnerName">Recipient</SortTh>
+                  <th>Items</th>
+                  <SortTh k="_total" align="right">Goods Value</SortTh>
+                  <SortTh k="_paid" align="right">Received</SortTh>
+                  <SortTh k="_pending" align="right">Pending</SortTh>
+                  <th>Method</th>
+                  <th>Status</th>
+                  <th>Proof</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(r => (
+                  <tr key={r.id}>
+                    <td>
+                      <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: 'var(--secondary)', background: 'var(--secondary-light)', padding: '2px 7px', borderRadius: 5 }}>
+                        {r.id}
+                      </span>
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap', fontSize: 12.5, fontWeight: 600 }}>{fmtDate(r.date)}</td>
+                    <td>
+                      <div style={{ fontWeight: 700, fontSize: 13 }}>{r.partnerName || '—'}</div>
+                      {r.partnerPhone && <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{r.partnerPhone}</div>}
+                    </td>
+                    <td style={{ maxWidth: 160 }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                        {(r.items || []).slice(0, 3).map(it => (
+                          <span key={it.name} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 20, background: 'var(--info-bg)', color: 'var(--info)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                            {it.name} ×{it.qty}
+                          </span>
+                        ))}
+                        {(r.items || []).length > 3 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{r.items.length - 3}</span>}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: r._total > 0 ? 'var(--primary)' : 'var(--text-muted)' }}>
+                      {r._total > 0 ? money(r._total) : '—'}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: r._paid > 0 ? 'var(--secondary)' : 'var(--text-muted)' }}>
+                      {r._paid > 0 ? money(r._paid) : '—'}
+                    </td>
+                    <td style={{ textAlign: 'right', fontWeight: 700, color: r._pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
+                      {r._pending > 0 ? money(r._pending) : r._total > 0 ? <span style={{ color: 'var(--secondary)', fontSize: 11 }}>Nil</span> : '—'}
+                    </td>
+                    <td>
+                      {r._paid > 0 ? (
+                        <span style={{ fontSize: 11.5, padding: '2px 8px', borderRadius: 20, fontWeight: 600, background: 'var(--border-light)', color: 'var(--text-secondary)' }}>

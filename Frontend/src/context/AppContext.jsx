@@ -61,7 +61,6 @@ function buildRaddiRow({ pickup, donor = {}, pickuppartnerObj = {}, data = {} })
   const ps         = derivePaymentStatus(totalValue, amountPaid)
   const raddiPS    = ps === 'Paid' ? 'Received' : ps === 'Write Off' ? 'Write-off' : 'Yet to Receive'
 
-  // Build per-item kg map from rstItemWeights
   const rawWeights = data.rstItemWeights || pickup.rstItemWeights || {}
   const itemKgMap  = {}
   Object.entries(rawWeights).forEach(([item, w]) => {
@@ -70,7 +69,6 @@ function buildRaddiRow({ pickup, donor = {}, pickuppartnerObj = {}, data = {} })
     }
   })
 
-  // Include Others custom items
   const rstOthers = data.rstOthers || pickup.rstOthers || []
 
   return {
@@ -89,10 +87,8 @@ function buildRaddiRow({ pickup, donor = {}, pickuppartnerObj = {}, data = {} })
     donorStatus:     deriveDonorStatus(data.date || pickup.date),
     rstItems:        data.rstItems || pickup.rstItems || [],
     sksItems:        data.sksItems || pickup.sksItems || [],
-    // Per-item kg breakdown
     itemKgMap,
     rstOthers,
-    // Rate chart from PickupPartner for per-item ₹ calculation
     pickuppartnerRateChart:    pickuppartnerObj.rateChart || {},
     totalKg:         Number(data.totalKg || pickup.totalKgs || pickup.totalKg)   || 0,
     totalAmount:     totalValue,
@@ -117,6 +113,11 @@ function initRaddiFromPickups(pickups, donors, pickuppartners) {
     })
 }
 
+// ── SKS sequential IDs ────────────────────────────────────────────────────────
+let _sksInSeq = 0, _sksOutSeq = 0
+const nextSksInId  = () => `IN-${String(++_sksInSeq).padStart(4, '0')}`
+const nextSksOutId = () => `OUT-${String(++_sksOutSeq).padStart(4, '0')}`
+
 export function AppProvider({ children }) {
 
   const [donors,       setDonors]  = useState(() => _initDonors)
@@ -125,6 +126,10 @@ export function AppProvider({ children }) {
   const [raddiRecords, setRaddi]   = useState(() =>
     initRaddiFromPickups(_initPickups, _initDonors, _initpickuppartners)
   )
+
+  // ── SKS Warehouse State ───────────────────────────────────────────────────
+  const [sksInflows,  setSksInflows]  = useState([])
+  const [sksOutflows, setSksOutflows] = useState([])
 
   useEffect(() => {
     initOrderSeq(_initPickups.length + 10)
@@ -412,7 +417,7 @@ export function AppProvider({ children }) {
     }
   }, [])
 
-  // ── CLEAR PARTNER BALANCE (supports paid + write-off modes) ───────────────
+  // ── CLEAR PARTNER BALANCE ─────────────────────────────────────────────────
   const clearPartnerBalance = useCallback(async ({ pickuppartnerId, pickuppartnerName }, paymentInfo) => {
     await delay()
     const {
@@ -421,7 +426,7 @@ export function AppProvider({ children }) {
       notes      = '',
       date:  payDate,
       screenshot = null,
-      writeOff   = false,   // true = write-off mode; false = paid
+      writeOff   = false,
     } = paymentInfo || {}
     const payD = payDate || today()
 
@@ -431,7 +436,7 @@ export function AppProvider({ children }) {
 
     setPickups(prevPickups => {
       const totalClearing = writeOff
-        ? 0  // No money received in write-off
+        ? 0
         : prevPickups
             .filter(p =>
               p.PickupPartner === pickuppartnerName &&
@@ -444,7 +449,6 @@ export function AppProvider({ children }) {
         if (k.id !== pickuppartnerId) return k
         return {
           ...k,
-          // Write-off: pending zeroed but amountReceived does NOT increase
           amountReceived: writeOff
             ? (k.amountReceived || 0)
             : (k.amountReceived || 0) + totalClearing,
@@ -489,6 +493,31 @@ export function AppProvider({ children }) {
         }
       })
     })
+  }, [])
+
+  // ── SKS Warehouse CRUD ────────────────────────────────────────────────────
+  const addSksInflow = useCallback(async (data) => {
+    await delay()
+    const entry = { ...data, id: data.id || nextSksInId() }
+    setSksInflows(prev => [entry, ...prev])
+    return entry
+  }, [])
+
+  const addSksOutflow = useCallback(async (data) => {
+    await delay()
+    const entry = { ...data, id: data.id || nextSksOutId() }
+    setSksOutflows(prev => [entry, ...prev])
+    return entry
+  }, [])
+
+  const deleteSksInflow = useCallback(async (id) => {
+    await delay()
+    setSksInflows(prev => prev.filter(r => r.id !== id))
+  }, [])
+
+  const deleteSksOutflow = useCallback(async (id) => {
+    await delay()
+    setSksOutflows(prev => prev.filter(r => r.id !== id))
   }, [])
 
   // ── Derived: PickupScheduler tab data ────────────────────────────────────
@@ -559,8 +588,15 @@ export function AppProvider({ children }) {
     donors, pickups, PickupPartners, raddiRecords,
     partners: PickupPartners,
     dashboardStats, schedulerTabData,
+    // SKS warehouse
+    sksInflows, sksOutflows,
+    addSksInflow, addSksOutflow,
+    deleteSksInflow, deleteSksOutflow,
+    // Donor ops
     addDonor, updateDonor, deleteDonor,
+    // Pickup ops
     createPickup, schedulePickup, recordPickup, updatePickup, deletePickup,
+    // Partner ops
     addPickupPartner, updatePickupPartner, deletePickupPartner,
     recordPickupPartnerPayment, clearPartnerBalance,
     addPartner:    addPickupPartner,
@@ -568,6 +604,8 @@ export function AppProvider({ children }) {
     deletePartner: deletePickupPartner,
   }), [
     donors, pickups, PickupPartners, raddiRecords, dashboardStats, schedulerTabData,
+    sksInflows, sksOutflows,
+    addSksInflow, addSksOutflow, deleteSksInflow, deleteSksOutflow,
     addDonor, updateDonor, deleteDonor,
     createPickup, schedulePickup, recordPickup, updatePickup, deletePickup,
     addPickupPartner, updatePickupPartner, deletePickupPartner,

@@ -1,5 +1,5 @@
 // Frontend/src/pages/SKSOverview.jsx
-// ENHANCED: Added toast feedback system for Stock In / Stock Out operations
+// ENHANCED: Payment integration in Stock Out, AppContext for shared state
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import {
   ArrowDownCircle, ArrowUpCircle, Package, Boxes,
@@ -8,14 +8,15 @@ import {
   ShoppingBag, Shirt, Footprints, Gift, Dumbbell, BookOpen,
   UtensilsCrossed, Armchair, Monitor, Laptop, Wind, Microwave,
   AlertCircle, ChevronDown, ChevronUp,
+  IndianRupee, Smartphone, CreditCard, FileText as FileTextIcon,
+  Image, Upload, Eye,
 } from 'lucide-react'
 import { useApp }  from '../context/AppContext'
 import { useRole } from '../context/RoleContext'
 import { CITIES, CITY_SECTORS, GURGAON_SOCIETIES, SKS_ITEMS } from '../data/mockData'
-import { fmtDate, exportToExcel } from '../utils/helpers'
+import { fmtDate, fmtCurrency, exportToExcel } from '../utils/helpers'
 
 // ── Toast Component ───────────────────────────────────────────────────────────
-// type: 'success' | 'error' | 'info'
 function Toast({ toasts, onRemove }) {
   return (
     <div style={{
@@ -66,28 +67,19 @@ function Toast({ toasts, onRemove }) {
   )
 }
 
-// ── useToast hook ─────────────────────────────────────────────────────────────
 function useToast() {
   const [toasts, setToasts] = useState([])
-
   const show = useCallback((message, type = 'success', sub = '', duration = 3500) => {
     const id = Date.now() + Math.random()
     setToasts(prev => [...prev, { id, message, type, sub }])
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id))
-    }, duration)
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), duration)
   }, [])
-
-  const remove = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
-  }, [])
-
+  const remove = useCallback((id) => setToasts(prev => prev.filter(t => t.id !== id)), [])
   return { toasts, show, remove }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const todayStr = () => new Date().toISOString().slice(0, 10)
-
 let _inSeq = 0, _outSeq = 0
 const nextInId  = () => `IN-${String(++_inSeq).padStart(4, '0')}`
 const nextOutId = () => `OUT-${String(++_outSeq).padStart(4, '0')}`
@@ -150,6 +142,81 @@ const DATE_PRESETS = [
   { id: 'custom', label: 'Custom' },
 ]
 
+const PAY_METHODS = [
+  { value: 'cash',   label: 'Cash',    icon: IndianRupee },
+  { value: 'upi',    label: 'UPI',     icon: Smartphone },
+  { value: 'bank',   label: 'Bank',    icon: CreditCard },
+  { value: 'cheque', label: 'Cheque',  icon: FileTextIcon },
+]
+
+// ── Image viewer helper ───────────────────────────────────────────────────────
+function openImageInTab(src, title = 'Payment Proof') {
+  const win = window.open('', '_blank')
+  win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;}</style></head><body><img src="${src}" style="max-width:100vw;max-height:100vh;object-fit:contain;"/></body></html>`)
+  win.document.close()
+}
+
+// ── Payment Method Pills ──────────────────────────────────────────────────────
+function PayMethodPicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {PAY_METHODS.map(m => {
+        const Icon = m.icon
+        const active = value === m.value
+        return (
+          <button key={m.value} type="button" onClick={() => onChange(m.value)}
+            style={{
+              flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+              gap: 4, padding: '8px 4px', borderRadius: 9, cursor: 'pointer',
+              border: `1.5px solid ${active ? 'var(--primary)' : 'var(--border)'}`,
+              background: active ? 'var(--primary-light)' : 'transparent',
+              color: active ? 'var(--primary)' : 'var(--text-muted)',
+              fontWeight: active ? 700 : 400, fontSize: 11.5,
+              transition: 'all 0.12s',
+            }}>
+            <Icon size={14} />
+            {m.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Screenshot thumbnail ──────────────────────────────────────────────────────
+function ScreenshotThumb({ src, label = 'Payment Proof' }) {
+  if (!src) return null
+  return (
+    <div
+      onClick={() => openImageInTab(src, label)}
+      title="Click to view full image"
+      style={{
+        cursor: 'pointer',
+        width: 52, height: 52,
+        borderRadius: 8,
+        overflow: 'hidden',
+        border: '2px solid var(--secondary)',
+        flexShrink: 0,
+        position: 'relative',
+        background: 'var(--bg)',
+      }}
+    >
+      <img src={src} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: 'rgba(0,0,0,0.35)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        opacity: 0, transition: 'opacity 0.15s',
+      }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0'}
+      >
+        <Eye size={16} color="white" />
+      </div>
+    </div>
+  )
+}
+
 // ── Stock In Form ─────────────────────────────────────────────────────────────
 function StockInForm({ allSKSItems, onAdd, onAddCustomItem, showToast }) {
   const [date,           setDate]           = useState(todayStr())
@@ -188,7 +255,7 @@ function StockInForm({ allSKSItems, onAdd, onAddCustomItem, showToast }) {
 
   const handleAddCustomItem = () => {
     const name = newItemName.trim()
-    if (!name) { return }
+    if (!name) return
     if (allSKSItems.includes(name)) {
       showToast(`"${name}" already exists in the list`, 'info'); setNewItemName(''); return
     }
@@ -206,21 +273,17 @@ function StockInForm({ allSKSItems, onAdd, onAddCustomItem, showToast }) {
     setSubmitting(true)
     const items = filledItems.map(([name, qty]) => ({ name, qty: Number(qty) }))
 
-    // Simulate async (consistent with rest of app)
     setTimeout(() => {
       onAdd({
         id: nextInId(), date, city, sector,
         society: showNewSociety ? newSocietyVal.trim() : society,
         items, notes: notes.trim(),
       })
-
-      // ✅ Success toast
       showToast(
         'Items stored in warehouse successfully',
         'success',
         `${totalQty} item${totalQty !== 1 ? 's' : ''} across ${items.length} categor${items.length !== 1 ? 'ies' : 'y'} recorded`
       )
-
       setItemQty({}); setNotes('')
       setSubmitting(false)
     }, 350)
@@ -239,7 +302,6 @@ function StockInForm({ allSKSItems, onAdd, onAddCustomItem, showToast }) {
       </div>
 
       <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-
         {/* Location */}
         <div style={{ background: 'var(--bg)', borderRadius: 10, padding: 14, border: '1px solid var(--border-light)' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -332,7 +394,6 @@ function StockInForm({ allSKSItems, onAdd, onAddCustomItem, showToast }) {
                 </div>
               )
             })}
-            {/* Total */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', padding: '9px 14px', background: 'var(--secondary-light)', borderTop: '1.5px solid rgba(27,94,53,0.2)', alignItems: 'center' }}>
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--secondary)' }}>Total Items</span>
               <span style={{ textAlign: 'right', fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 800, color: totalQty > 0 ? 'var(--secondary)' : 'var(--text-muted)' }}>
@@ -367,15 +428,12 @@ function StockInForm({ allSKSItems, onAdd, onAddCustomItem, showToast }) {
             placeholder="Donor name, drive details, remarks…" style={{ minHeight: 60, resize: 'vertical' }} />
         </div>
 
-        {/* Inline error */}
         {error && (
           <div className="alert-strip alert-danger" style={{ padding: '10px 14px', margin: 0 }}>
-            <AlertCircle size={14} style={{ flexShrink: 0 }} />
-            {error}
+            <AlertCircle size={14} style={{ flexShrink: 0 }} />{error}
           </div>
         )}
 
-        {/* Preview of what will be saved */}
         {filledItems.length > 0 && (
           <div style={{ padding: '10px 14px', background: 'var(--secondary-light)', borderRadius: 8, border: '1px solid rgba(27,94,53,0.15)' }}>
             <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--secondary)', marginBottom: 6 }}>Ready to save:</div>
@@ -444,7 +502,6 @@ function HistoryView({ inflows, isAdmin, onDelete, showToast }) {
 
   return (
     <div>
-      {/* Filters */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 16, boxShadow: 'var(--shadow)' }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
           <Calendar size={13} color="var(--primary)" />
@@ -471,7 +528,6 @@ function HistoryView({ inflows, isAdmin, onDelete, showToast }) {
         </div>
       </div>
 
-      {/* Summary */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, fontSize: 12.5, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
         <span><strong style={{ color: 'var(--text-primary)' }}>{filtered.length}</strong> entries ·</span>
         <span><strong style={{ color: 'var(--secondary)' }}>{totalQty}</strong> items received</span>
@@ -567,6 +623,117 @@ function HistoryView({ inflows, isAdmin, onDelete, showToast }) {
   )
 }
 
+// ── Payment Section for Dispatch ──────────────────────────────────────────────
+function DispatchPaymentSection({ totalItems, payState, onChange }) {
+  const { method, amount, reference, notes, screenshot } = payState
+
+  const handleScreenshot = (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => onChange({ ...payState, screenshot: ev.target.result })
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  return (
+    <div style={{ background: 'linear-gradient(135deg, rgba(232,82,26,0.04), rgba(245,185,66,0.04))', borderRadius: 10, padding: 14, border: '1px solid rgba(232,82,26,0.18)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <IndianRupee size={12} /> Payment Received (Optional)
+      </div>
+
+      {/* Method */}
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'block', marginBottom: 7 }}>Payment Method</label>
+        <PayMethodPicker value={method} onChange={m => onChange({ ...payState, method: m, reference: '', screenshot: null })} />
+      </div>
+
+      {/* Amount */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label style={{ fontSize: 11.5 }}>Amount Received (₹)</label>
+          <input type="number" min={0} inputMode="decimal"
+            value={amount}
+            onChange={e => onChange({ ...payState, amount: e.target.value })}
+            placeholder="0" />
+        </div>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label style={{ fontSize: 11.5 }}>Total Goods Value (₹)</label>
+          <input type="number" min={0} inputMode="decimal"
+            value={payState.totalValue || ''}
+            onChange={e => onChange({ ...payState, totalValue: e.target.value })}
+            placeholder="Estimated value of goods" />
+        </div>
+      </div>
+
+      {/* Reference — non-cash only */}
+      {method && method !== 'cash' && (
+        <div className="form-group" style={{ margin: '0 0 12px' }}>
+          <label style={{ fontSize: 11.5 }}>
+            {method === 'upi' ? 'UPI Transaction ID' : method === 'bank' ? 'Bank Reference No.' : 'Cheque Number'}
+            <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)', marginLeft: 4 }}>(optional)</span>
+          </label>
+          <input value={reference} onChange={e => onChange({ ...payState, reference: e.target.value })} placeholder="Reference number…" />
+        </div>
+      )}
+
+      {/* UPI Screenshot */}
+      {method === 'upi' && (
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+            <Image size={12} color="var(--info)" /> Payment Screenshot
+            <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span>
+          </label>
+          {screenshot ? (
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <ScreenshotThumb src={screenshot} label="Payment Proof" />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--secondary)', marginBottom: 4 }}>Screenshot attached ✓</div>
+                <button type="button" onClick={() => onChange({ ...payState, screenshot: null })}
+                  style={{ fontSize: 11.5, color: 'var(--danger)', background: 'var(--danger-bg)', border: '1px solid var(--danger)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontWeight: 600 }}>
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <label className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', borderStyle: 'dashed', cursor: 'pointer', padding: '8px' }}>
+              <Upload size={13} /> Upload UPI Screenshot
+              <input type="file" accept="image/*" style={{ display: 'none' }} onChange={handleScreenshot} />
+            </label>
+          )}
+        </div>
+      )}
+
+      {/* Notes */}
+      <div className="form-group" style={{ margin: 0 }}>
+        <label style={{ fontSize: 11.5 }}>Payment Notes <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
+        <input value={notes} onChange={e => onChange({ ...payState, notes: e.target.value })} placeholder="Any remarks about this payment…" />
+      </div>
+
+      {/* Payment summary preview */}
+      {Number(amount) > 0 && (
+        <div style={{ marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border-light)', display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12.5, alignItems: 'center' }}>
+          {(() => {
+            const paid = Number(amount) || 0
+            const total = Number(payState.totalValue) || 0
+            const status = total === 0 ? 'Not Set' : paid >= total ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Not Paid'
+            const colors = { 'Paid': 'var(--secondary)', 'Partially Paid': 'var(--warning)', 'Not Paid': 'var(--danger)', 'Not Set': 'var(--text-muted)' }
+            return (
+              <>
+                <span style={{ fontWeight: 700, color: colors[status], fontSize: 12 }}>{status}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: 11.5 }}>·</span>
+                <span style={{ color: 'var(--secondary)', fontWeight: 700 }}>₹{paid.toLocaleString('en-IN')} received</span>
+                {total > 0 && paid < total && (
+                  <span style={{ color: 'var(--danger)', fontWeight: 600 }}>Due: ₹{Math.max(0, total - paid).toLocaleString('en-IN')}</span>
+                )}
+              </>
+            )
+          })()}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── In Warehouse ──────────────────────────────────────────────────────────────
 function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, onDeleteOutflow, showToast }) {
   const [showDispatch,  setShowDispatch]  = useState(false)
@@ -578,13 +745,16 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
   const [dispError,     setDispError]     = useState('')
   const [dispatching,   setDispatching]   = useState(false)
 
+  // Payment state for dispatch
+  const [payState, setPayState] = useState({
+    method: 'cash', amount: '', reference: '', notes: '', screenshot: null, totalValue: '',
+  })
+
   const totalInStock   = Object.values(stock).reduce((s, v) => s + v, 0)
   const totalDispatch  = Object.values(dispQty).reduce((s, v) => s + (Number(v) || 0), 0)
   const filledDispatch = Object.entries(dispQty).filter(([, q]) => (Number(q) || 0) > 0)
   const canDispatch    = partnerName.trim() && dispDate && totalDispatch > 0
-
-  // Check for over-dispatch
-  const overDispatch = filledDispatch.some(([name, qty]) => (Number(qty) || 0) > (stock[name] || 0))
+  const overDispatch   = filledDispatch.some(([name, qty]) => (Number(qty) || 0) > (stock[name] || 0))
 
   const handleDispatch = () => {
     setDispError('')
@@ -596,17 +766,38 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
     setDispatching(true)
     const items = filledDispatch.map(([name, qty]) => ({ name, qty: Number(qty) }))
 
-    setTimeout(() => {
-      onAddOutflow({ id: nextOutId(), date: dispDate, partnerName: partnerName.trim(), partnerPhone: partnerPhone.trim(), items, notes: dispNotes.trim() })
+    // Compute payment status
+    const paid = Number(payState.amount) || 0
+    const total = Number(payState.totalValue) || 0
+    const paymentStatus = total === 0 ? 'Not Recorded' : paid >= total ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Not Paid'
 
-      // ✅ Success toast
+    setTimeout(() => {
+      onAddOutflow({
+        id: nextOutId(),
+        date: dispDate,
+        partnerName: partnerName.trim(),
+        partnerPhone: partnerPhone.trim(),
+        items,
+        notes: dispNotes.trim(),
+        payment: {
+          method: payState.method,
+          amount: paid,
+          totalValue: total,
+          reference: payState.reference.trim(),
+          notes: payState.notes.trim(),
+          screenshot: payState.screenshot,
+          status: paymentStatus,
+        },
+      })
+
       showToast(
-        'Items removed from warehouse successfully',
+        'Items dispatched successfully',
         'success',
-        `${totalDispatch} item${totalDispatch !== 1 ? 's' : ''} dispatched to ${partnerName.trim()}`
+        `${totalDispatch} item${totalDispatch !== 1 ? 's' : ''} sent to ${partnerName.trim()}${paid > 0 ? ` · ₹${paid.toLocaleString('en-IN')} received` : ''}`
       )
 
       setDispQty({}); setPartnerName(''); setPartnerPhone(''); setDispNotes(''); setDispError('')
+      setPayState({ method: 'cash', amount: '', reference: '', notes: '', screenshot: null, totalValue: '' })
       setDispatching(false)
       setShowDispatch(false)
     }, 350)
@@ -643,6 +834,11 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
           <div className="stat-value">{outflows.reduce((s, r) => s + (r.items || []).reduce((a, it) => a + it.qty, 0), 0)}</div>
           <div className="stat-label">Total Dispatched</div>
           <div className="stat-change up">{outflows.length} dispatches</div>
+        </div>
+        <div className="stat-card blue">
+          <div className="stat-icon"><IndianRupee size={18} /></div>
+          <div className="stat-value">{fmtCurrency(outflows.reduce((s, r) => s + (r.payment?.amount || 0), 0))}</div>
+          <div className="stat-label">Payments Received</div>
         </div>
       </div>
 
@@ -735,8 +931,8 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
               </span>
             )}
           </div>
-          <div className="card-body">
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12, marginBottom: 12 }}>
+          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
               <div className="form-group" style={{ margin: 0 }}>
                 <label>Recipient / Partner Name <span className="required">*</span></label>
                 <input value={partnerName} onChange={e => setPartnerName(e.target.value)} placeholder="e.g. Teach for India" />
@@ -750,19 +946,27 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
                 <input type="date" value={dispDate} onChange={e => setDispDate(e.target.value)} />
               </div>
             </div>
-            <div className="form-group" style={{ margin: '0 0 12px' }}>
+
+            <div className="form-group" style={{ margin: 0 }}>
               <label>Notes</label>
               <textarea value={dispNotes} onChange={e => setDispNotes(e.target.value)} placeholder="Purpose, receipt reference…" style={{ minHeight: 52 }} />
             </div>
 
+            {/* ── PAYMENT SECTION ── */}
+            <DispatchPaymentSection
+              totalItems={totalDispatch}
+              payState={payState}
+              onChange={setPayState}
+            />
+
             {dispError && (
-              <div className="alert-strip alert-danger" style={{ marginBottom: 12 }}>
+              <div className="alert-strip alert-danger">
                 <AlertCircle size={13} style={{ flexShrink: 0 }} /> {dispError}
               </div>
             )}
 
             {filledDispatch.length > 0 && !overDispatch && (
-              <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, fontWeight: 700, color: 'var(--primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ padding: '8px 12px', background: 'var(--primary-light)', borderRadius: 8, fontSize: 13, fontWeight: 700, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Package size={14} />
                 Dispatching: {filledDispatch.map(([n, q]) => `${n} ×${q}`).join(' · ')}
               </div>
@@ -772,7 +976,7 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
               style={{ width: '100%', justifyContent: 'center', padding: '10px', opacity: (canDispatch && !overDispatch) ? 1 : 0.5 }}>
               {dispatching
                 ? <><span className="spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid rgba(255,255,255,0.4)', borderTopColor: 'white', borderRadius: '50%' }} /> Dispatching…</>
-                : <><ArrowUpCircle size={15} /> Confirm Dispatch</>}
+                : <><ArrowUpCircle size={15} /> Confirm Dispatch{Number(payState.amount) > 0 ? ` + Record ₹${Number(payState.amount).toLocaleString('en-IN')}` : ''}</>}
             </button>
           </div>
         </div>
@@ -789,8 +993,10 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
           <div>
             {[...outflows].sort((a, b) => (b.date || '').localeCompare(a.date || '')).map((r, i) => {
               const totalQ = (r.items || []).reduce((s, it) => s + it.qty, 0)
+              const pay = r.payment || {}
+              const payPaid = Number(pay.amount) || 0
               return (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: i < outflows.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', borderBottom: i < outflows.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
                   <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--primary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <ArrowUpCircle size={15} color="var(--primary)" />
                   </div>
@@ -801,13 +1007,29 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
                       {r.partnerPhone && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.partnerPhone}</span>}
                       <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>{fmtDate(r.date)}</span>
                     </div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginBottom: 4 }}>
                       {(r.items || []).map(it => (
                         <span key={it.name} style={{ fontSize: 10.5, padding: '1px 8px', borderRadius: 20, background: 'var(--primary-light)', color: 'var(--primary)', fontWeight: 600 }}>
                           {it.name} ×{it.qty}
                         </span>
                       ))}
                     </div>
+                    {/* Payment info */}
+                    {payPaid > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--secondary)', background: 'var(--secondary-light)', padding: '2px 9px', borderRadius: 20 }}>
+                          ₹{payPaid.toLocaleString('en-IN')} received · {pay.method?.toUpperCase() || 'CASH'}
+                        </span>
+                        {pay.status && (
+                          <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, fontWeight: 700, background: pay.status === 'Paid' ? 'var(--secondary-light)' : pay.status === 'Partially Paid' ? 'var(--warning-bg)' : 'var(--border-light)', color: pay.status === 'Paid' ? 'var(--secondary)' : pay.status === 'Partially Paid' ? '#92400E' : 'var(--text-muted)' }}>
+                            {pay.status}
+                          </span>
+                        )}
+                        {pay.screenshot && (
+                          <ScreenshotThumb src={pay.screenshot} label={`Payment Proof — ${r.partnerName}`} />
+                        )}
+                      </div>
+                    )}
                     {r.notes && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 3 }}>{r.notes}</div>}
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -835,13 +1057,16 @@ function WarehouseView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, on
 
 // ════════════════════════════════════════════════════════════════════════════
 export default function SKSOverview() {
-  const { pickups } = useApp()
-  const { role }    = useRole()
-  const isAdmin     = role === 'admin'
+  const {
+    pickups,
+    sksInflows, sksOutflows,
+    addSksInflow, addSksOutflow,
+    deleteSksInflow, deleteSksOutflow,
+  } = useApp()
+  const { role } = useRole()
+  const isAdmin  = role === 'admin'
 
   const [section,     setSection]     = useState('stockin')
-  const [inflows,     setInflows]     = useState([])
-  const [outflows,    setOutflows]    = useState([])
   const [customItems, setCustomItems] = useState([])
 
   const { toasts, show: showToast, remove: removeToast } = useToast()
@@ -851,34 +1076,33 @@ export default function SKSOverview() {
     return [...SKS_ITEMS, ...customItems.filter(c => !base.has(c))]
   }, [customItems])
 
-  const stock = useMemo(() => computeStock(inflows, outflows), [inflows, outflows])
+  const stock = useMemo(() => computeStock(sksInflows, sksOutflows), [sksInflows, sksOutflows])
 
-  const addInflow     = useCallback(r => setInflows(prev => [r, ...prev]), [])
-  const addOutflow    = useCallback(r => setOutflows(prev => [r, ...prev]), [])
-  const deleteInflow  = useCallback(id => setInflows(prev => prev.filter(r => r.id !== id)), [])
-  const deleteOutflow = useCallback(id => setOutflows(prev => prev.filter(r => r.id !== id)), [])
+  const addInflow     = useCallback(async (r) => { await addSksInflow(r) }, [addSksInflow])
+  const addOutflow    = useCallback(async (r) => { await addSksOutflow(r) }, [addSksOutflow])
+  const deleteInflow  = useCallback(async (id) => { await deleteSksInflow(id) }, [deleteSksInflow])
+  const deleteOutflow = useCallback(async (id) => { await deleteSksOutflow(id) }, [deleteSksOutflow])
   const addCustomItem = useCallback(name => setCustomItems(prev => prev.includes(name) ? prev : [...prev, name]), [])
 
   const totalInStock    = Object.values(stock).reduce((s, v) => s + v, 0)
-  const totalReceived   = inflows.reduce((s, r) => s + (r.items || []).reduce((a, it) => a + it.qty, 0), 0)
-  const totalDispatched = outflows.reduce((s, r) => s + (r.items || []).reduce((a, it) => a + it.qty, 0), 0)
+  const totalReceived   = sksInflows.reduce((s, r) => s + (r.items || []).reduce((a, it) => a + it.qty, 0), 0)
+  const totalDispatched = sksOutflows.reduce((s, r) => s + (r.items || []).reduce((a, it) => a + it.qty, 0), 0)
 
   const TABS = [
     { id: 'stockin',   label: '↓ Stock In',         count: null },
-    { id: 'history',   label: '📋 Stock In History', count: inflows.length || null },
+    { id: 'history',   label: '📋 Stock In History', count: sksInflows.length || null },
     { id: 'warehouse', label: '📦 In Warehouse',     count: totalInStock > 0 ? totalInStock : null },
   ]
 
   return (
     <div className="page-body">
-
       {/* Global KPIs */}
       <div className="stat-grid" style={{ marginBottom: 20 }}>
         <div className="stat-card green">
           <div className="stat-icon"><Boxes size={18} /></div>
           <div className="stat-value">{totalInStock}</div>
           <div className="stat-label">In Warehouse Now</div>
-          <div className="stat-change up">{inflows.length} inflow entries</div>
+          <div className="stat-change up">{sksInflows.length} inflow entries</div>
         </div>
         <div className="stat-card blue">
           <div className="stat-icon"><ArrowDownCircle size={18} /></div>
@@ -890,7 +1114,12 @@ export default function SKSOverview() {
           <div className="stat-icon"><ArrowUpCircle size={18} /></div>
           <div className="stat-value">{totalDispatched}</div>
           <div className="stat-label">Total Dispatched</div>
-          <div className="stat-change up">{outflows.length} dispatches</div>
+          <div className="stat-change up">{sksOutflows.length} dispatches</div>
+        </div>
+        <div className="stat-card yellow">
+          <div className="stat-icon"><IndianRupee size={18} /></div>
+          <div className="stat-value">{fmtCurrency(sksOutflows.reduce((s, r) => s + (r.payment?.amount || 0), 0))}</div>
+          <div className="stat-label">SKS Payments In</div>
         </div>
       </div>
 
@@ -920,35 +1149,19 @@ export default function SKSOverview() {
       </div>
 
       {section === 'stockin' && (
-        <StockInForm
-          allSKSItems={allSKSItems}
-          onAdd={addInflow}
-          onAddCustomItem={addCustomItem}
-          showToast={showToast}
-        />
+        <StockInForm allSKSItems={allSKSItems} onAdd={addInflow} onAddCustomItem={addCustomItem} showToast={showToast} />
       )}
       {section === 'history' && (
-        <HistoryView
-          inflows={inflows}
-          isAdmin={isAdmin}
-          onDelete={deleteInflow}
-          showToast={showToast}
-        />
+        <HistoryView inflows={sksInflows} isAdmin={isAdmin} onDelete={deleteInflow} showToast={showToast} />
       )}
       {section === 'warehouse' && (
         <WarehouseView
-          stock={stock}
-          allSKSItems={allSKSItems}
-          outflows={outflows}
-          isAdmin={isAdmin}
-          onAddOutflow={addOutflow}
-          onDeleteOutflow={deleteOutflow}
-          showToast={showToast}
+          stock={stock} allSKSItems={allSKSItems} outflows={sksOutflows}
+          isAdmin={isAdmin} onAddOutflow={addOutflow} onDeleteOutflow={deleteOutflow} showToast={showToast}
         />
       )}
 
-      {/* Global Toast Layer */}
       <Toast toasts={toasts} onRemove={removeToast} />
     </div>
   )
-}
+} 
