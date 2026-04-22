@@ -1089,12 +1089,7 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
         </div>
       </div>
 
-      <div style={{ marginBottom: 16, padding: '9px 14px', background: 'linear-gradient(135deg, rgba(27,94,53,0.06), rgba(232,82,26,0.06))', borderRadius: 8, border: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 8 }}>
-        <RefreshCw size={12} color="var(--secondary)" />
-        <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontWeight: 600 }}>
-          Live sync — changes here reflect in Dashboard, Raddi Master &amp; RST Analytics
-        </span>
-      </div>
+       
 
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', padding: '12px 16px', marginBottom: 16, boxShadow: 'var(--shadow)' }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
