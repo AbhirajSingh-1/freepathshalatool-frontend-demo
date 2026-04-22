@@ -173,7 +173,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
             <ChevronDown size={13} style={{ marginLeft:'auto', color:'var(--text-muted)', flexShrink:0, transform: openSec ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}/>
           </div>
           {openSec && (
-            <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, zIndex:100, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'var(--shadow-md)', overflow:'hidden' }}>
+            <div style={{ position:'absolute', bottom:'calc(100% + 4px)', left:0, right:0, zIndex:100, background:'var(--surface)', border:'1px solid var(--border)', borderRadius:'var(--radius)', boxShadow:'var(--shadow-md)', overflow:'hidden' }}>
               <div style={{ padding:'8px 8px', borderBottom:'1px solid var(--border-light)' }}>
                 <input
                   autoFocus
@@ -588,152 +588,178 @@ export default function PickupPartners() {
 
   const isExecutive = role === 'executive'
 
-  // ── REDESIGNED 2-COLUMN MODAL ─────────────────────────────────────────────
+  // ── REDESIGNED COMPACT 2-COLUMN MODAL ───────────────────────────────────────
   function renderModal() {
+    const rateChartSafe = form.rateChart || DEFAULT_RATE_CHART
     return (
       <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && close()}>
-        <div className="modal" style={{ maxWidth: 520, width: '95vw' }}>
+        <div className="modal" style={{ maxWidth: 1080, width: '96vw', maxHeight: '96vh', overflow: 'visible' }}>
 
-          {/* Header */}
-          <div className="modal-header">
-            <UserCheck size={18} color="var(--secondary)" />
-            <div>
-              <div className="modal-title">{editing ? 'Edit Pickup Partner' : 'Add Pickup Partner'}</div>
-              {editing?.id && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>ID: {editing.id}</div>}
+          {/* Header — compact */}
+          <div className="modal-header" style={{ padding: '14px 22px 12px' }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--secondary-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <UserCheck size={16} color="var(--secondary)" />
             </div>
-            <button className="btn btn-ghost btn-icon btn-sm" style={{ marginLeft: 'auto' }} onClick={close}>
+            <div style={{ flex: 1 }}>
+              <div className="modal-title" style={{ fontSize: 15 }}>{editing ? 'Edit Pickup Partner' : 'Add New Pickup Partner'}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>
+                {editing?.id ? `ID: ${editing.id}` : 'Fill in partner details below'}
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={close}>
               <X size={16} />
             </button>
           </div>
 
-          {/* Body — single column, spacious */}
-          <div className="modal-body" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* Body — 2-column grid */}
+          <div className="modal-body" style={{ padding: '16px 22px' }}>
             {error && (
-              <div className="alert-strip alert-danger">
+              <div className="alert-strip alert-danger" style={{ marginBottom: 12 }}>
                 <AlertCircle size={13} /> {error}
               </div>
             )}
 
-            {/* ── Basic Info ── */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Full Name <span className="required">*</span></label>
-                <input
-                  value={form.name || ''}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="e.g. Suresh Bhai"
-                  autoFocus
-                />
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>Mobile <span className="required">*</span></label>
-                  <input
-                    value={form.mobile || ''}
-                    onChange={e => setForm(f => ({ ...f, mobile: e.target.value }))}
-                    placeholder="10-digit"
-                    maxLength={10}
-                    inputMode="numeric"
+            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 22 }}>
+
+              {/* ═══ LEFT COLUMN ═══ */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                {/* Personal Info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: -2 }}>
+                  <Users size={11} color="var(--primary)" />
+                  <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Personal Info</span>
+                </div>
+
+                {/* Row 1: Name + Mobile */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 11.5 }}>Full Name <span className="required">*</span></label>
+                    <input
+                      value={form.name || ''}
+                      onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                      placeholder="e.g. Suresh Bhai"
+                      autoFocus
+                      style={{ padding: '7px 10px', fontSize: 13 }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 11.5 }}>Mobile <span className="required">*</span></label>
+                    <input
+                      value={form.mobile || ''}
+                      onChange={e => setForm(f => ({ ...f, mobile: e.target.value }))}
+                      placeholder="10-digit"
+                      maxLength={10}
+                      inputMode="numeric"
+                      style={{ padding: '7px 10px', fontSize: 13 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: City + Email */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 10 }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 11.5 }}>City</label>
+                    <select
+                      value={form.city || 'Gurgaon'}
+                      onChange={e => setForm(f => ({ ...f, city: e.target.value, sectors: [], societies: [] }))}
+                      style={{ padding: '7px 10px', fontSize: 13 }}
+                    >
+                      {CITIES.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label style={{ fontSize: 11.5 }}>Email <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
+                    <input
+                      type="email"
+                      value={form.email || ''}
+                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                      placeholder="partner@email.com"
+                      style={{ padding: '7px 10px', fontSize: 13 }}
+                    />
+                  </div>
+                </div>
+
+                {/* Coverage Area */}
+                <div style={{ background: 'var(--bg)', borderRadius: 8, padding: '10px 12px', border: '1px solid var(--border-light)', flex: 1 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <MapPin size={11} /> Coverage Area
+                  </div>
+                  <CoverageSelector
+                    city={form.city || 'Gurgaon'}
+                    sectors={form.sectors || []}
+                    societies={form.societies || []}
+                    onSectors={s => setForm(f => ({ ...f, sectors: s }))}
+                    onSocieties={s => setForm(f => ({ ...f, societies: s }))}
                   />
                 </div>
-                <div className="form-group" style={{ margin: 0 }}>
-                  <label>City</label>
-                  <select
-                    value={form.city || 'Gurgaon'}
-                    onChange={e => setForm(f => ({ ...f, city: e.target.value, sectors: [], societies: [] }))}
-                  >
-                    {CITIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                </div>
               </div>
-              <div className="form-group" style={{ margin: 0 }}>
-                <label>Email <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)' }}>(optional)</span></label>
-                <input
-                  type="email"
-                  value={form.email || ''}
-                  onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
-                  placeholder="partner@email.com"
-                />
-              </div>
-            </div>
 
-            {/* ── Coverage ── */}
-            <div style={{ background: 'var(--bg)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border-light)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <MapPin size={12} /> Coverage Area
-              </div>
-              <CoverageSelector
-                city={form.city || 'Gurgaon'}
-                sectors={form.sectors || []}
-                societies={form.societies || []}
-                onSectors={s => setForm(f => ({ ...f, sectors: s }))}
-                onSocieties={s => setForm(f => ({ ...f, societies: s }))}
-              />
-            </div>
+              {/* ═══ RIGHT COLUMN ═══ */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-            {/* ── Rate Chart (collapsible) ── */}
-            <div style={{ background: 'var(--secondary-light)', borderRadius: 10, padding: '12px 16px', border: '1px solid rgba(27,94,53,0.2)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: showRateEditor ? 12 : 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <IndianRupee size={12} /> Rate Chart (₹/kg)
+                {/* Rate Chart — always visible, compact 2-col grid */}
+                <div style={{ background: 'var(--secondary-light)', borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(27,94,53,0.2)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <IndianRupee size={11} /> Rate Chart (₹/kg)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'rgba(27,94,53,0.12)', borderRadius: 6, overflow: 'hidden' }}>
+                    {RATE_CHART_ITEMS.map(item => (
+                      <div key={item} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'rgba(255,255,255,0.85)', gap: 4 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{item}</span>
+                        <div style={{ position: 'relative', width: 56, flexShrink: 0 }}>
+                          <span style={{ position: 'absolute', left: 5, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none' }}>₹</span>
+                          <input
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            inputMode="decimal"
+                            value={rateChartSafe[item] ?? ''}
+                            onChange={e => setForm(f => ({ ...f, rateChart: { ...rateChartSafe, [item]: parseFloat(e.target.value) || 0 } }))}
+                            style={{ width: '100%', padding: '3px 4px 3px 16px', fontSize: 11.5, fontWeight: 700, textAlign: 'right', border: '1px solid var(--border)', borderRadius: 4, background: 'white' }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <button type="button" onClick={() => setShowRateEditor(v => !v)} className="btn btn-sm btn-ghost" style={{ fontSize: 11.5 }}>
-                  {showRateEditor ? <><ChevronUp size={11} /> Collapse</> : <><ChevronDown size={11} /> Edit Rates</>}
-                </button>
-              </div>
-              {showRateEditor ? (
-                <RateChartEditor
-                  rateChart={form.rateChart || DEFAULT_RATE_CHART}
-                  onChange={rc => setForm(f => ({ ...f, rateChart: rc }))}
-                />
-              ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {RATE_CHART_ITEMS.slice(0, 5).map(item => (
-                    <div key={item} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: 'rgba(255,255,255,0.7)', borderRadius: 20, fontSize: 11, border: '1px solid rgba(27,94,53,0.15)' }}>
-                      <span style={{ color: 'var(--text-muted)' }}>{item.split(' ')[0]}</span>
-                      <span style={{ fontWeight: 700, color: 'var(--secondary)' }}>₹{(form.rateChart || {})[item] ?? 0}</span>
-                    </div>
-                  ))}
-                  <span style={{ fontSize: 10.5, color: 'var(--text-muted)', padding: '2px 4px' }}>+{RATE_CHART_ITEMS.length - 5} more</span>
-                </div>
-              )}
-            </div>
 
-            {/* ── Documents (collapsible) ── */}
-            <div style={{ background: 'rgba(59,130,246,0.05)', borderRadius: 10, padding: '12px 16px', border: '1px solid rgba(59,130,246,0.15)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--info)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <FileText size={12} /> Documents <span style={{ fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <DocUpload
-                  label="Partner Photo"
-                  icon={Image}
-                  value={form.photo}
-                  accept="image/*"
-                  preview
-                  onChange={handleFileUpload('photo')}
-                  onRemove={() => setForm(f => ({ ...f, photo: null }))}
-                />
-                <DocUpload
-                  label="Aadhaar Card"
-                  icon={FileText}
-                  value={form.aadhaarDoc}
-                  accept="image/*,application/pdf"
-                  onChange={handleFileUpload('aadhaarDoc')}
-                  onRemove={() => setForm(f => ({ ...f, aadhaarDoc: null }))}
-                />
+                {/* Documents */}
+                <div style={{ background: 'rgba(59,130,246,0.04)', borderRadius: 8, padding: '10px 12px', border: '1px solid rgba(59,130,246,0.12)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--info)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <FileText size={11} /> Documents <span style={{ fontSize: 9.5, fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <DocUpload
+                      label="Photo"
+                      icon={Image}
+                      value={form.photo}
+                      accept="image/*"
+                      preview
+                      onChange={handleFileUpload('photo')}
+                      onRemove={() => setForm(f => ({ ...f, photo: null }))}
+                    />
+                    <DocUpload
+                      label="Aadhaar"
+                      icon={FileText}
+                      value={form.aadhaarDoc}
+                      accept="image/*,application/pdf"
+                      onChange={handleFileUpload('aadhaarDoc')}
+                      onRemove={() => setForm(f => ({ ...f, aadhaarDoc: null }))}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="modal-footer">
-            <button className="btn btn-ghost" onClick={close} disabled={saving}>Cancel</button>
+          <div className="modal-footer" style={{ padding: '10px 22px', background: 'var(--surface)', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)' }}>
+            <button className="btn btn-ghost btn-sm" onClick={close} disabled={saving}>Cancel</button>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary btn-sm"
               onClick={save}
               disabled={saving || !form.name?.trim() || !form.mobile?.trim()}
-              style={{ minWidth: 140 }}
+              style={{ minWidth: 130, padding: '8px 20px', fontSize: 13 }}
             >
               {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add Pickup Partner'}
             </button>
@@ -757,187 +783,138 @@ export default function PickupPartners() {
   return (
     <div className="page-body">
 
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:10 }}>
-        <div>
-          <div style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:700 }}>Pickup Partner Directory</div>
-          <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:2 }}>{partners.length} partner{partners.length !== 1 ? 's' : ''} total</div>
-        </div>
-        <button className="btn btn-primary btn-sm" onClick={() => open()}>
-          <Plus size={14}/> Add Pickup Partner
-        </button>
-      </div>
-
-      {/* Active / Inactive tabs */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 20 }}>
-        <button className={`btn btn-sm ${statusTab === 'active' ? 'btn-secondary' : 'btn-ghost'}`}
-          onClick={() => setStatusTab('active')}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', fontSize: 13 }}>
-          <UserCheck size={14} />
-          Active Partners
-          <span style={{ background: statusTab === 'active' ? 'rgba(255,255,255,0.3)' : 'var(--border)', color: statusTab === 'active' ? 'white' : 'var(--text-muted)', borderRadius: 20, fontSize: 10.5, padding: '1px 8px', fontWeight: 700 }}>
-            {activeCount}
-          </span>
-        </button>
-        <button className={`btn btn-sm ${statusTab === 'inactive' ? 'btn-danger' : 'btn-ghost'}`}
-          onClick={() => setStatusTab('inactive')}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 16px', fontSize: 13 }}>
-          <UserX size={14} />
-          Inactive Partners
-          <span style={{ background: statusTab === 'inactive' ? 'rgba(255,255,255,0.3)' : 'var(--border)', color: statusTab === 'inactive' ? 'white' : 'var(--text-muted)', borderRadius: 20, fontSize: 10.5, padding: '1px 8px', fontWeight: 700 }}>
-            {inactiveCount}
-          </span>
-        </button>
-      </div>
-
-      {/* Directory filters */}
-      <div style={{ background:'var(--surface)', border:'1px solid var(--border-light)', borderRadius:'var(--radius)', padding:'14px 16px', marginBottom:20, boxShadow:'var(--shadow)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
-          <Search size={14} color="var(--primary)"/>
-          <span style={{ fontSize:12, fontWeight:700, color:'var(--text-secondary)', textTransform:'uppercase', letterSpacing:'0.05em' }}>Filter Partners</span>
-          {hasDirFilters && (
-            <button className="btn btn-ghost btn-sm" onClick={clearDirFilters} style={{ marginLeft:'auto', fontSize:11, color:'var(--danger)', border:'1px solid var(--danger)', padding:'3px 10px' }}>
-              <X size={10}/> Clear All
-            </button>
-          )}
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))', gap:10 }}>
-          <div style={{ gridColumn:'span 2', minWidth:0 }}>
-            <div style={{ position:'relative' }}>
-              <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}/>
-              <input value={dirSearch} onChange={e => setDirSearch(e.target.value)} placeholder="Name or mobile…" style={{ paddingLeft:32, fontSize:13, width:'100%' }}/>
-            </div>
+      {/* ── Header Bar ── */}
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, gap:12, flexWrap:'wrap' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:14 }}>
+          <div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:17, fontWeight:700, letterSpacing:'-0.01em' }}>Pickup Partners</div>
+            <div style={{ fontSize:11.5, color:'var(--text-muted)', marginTop:1 }}>{partners.length} partner{partners.length !== 1 ? 's' : ''} registered</div>
           </div>
-          <select value={dirFilterCity} onChange={e => { setDirFilterCity(e.target.value); setDirFilterSector(''); setDirFilterSociety('') }} style={{ fontSize:13 }}>
-            <option value="">All Cities</option>
-            {CITIES.map(c => <option key={c}>{c}</option>)}
-          </select>
-          <select value={dirFilterSector} onChange={e => { setDirFilterSector(e.target.value); setDirFilterSociety('') }} disabled={!dirFilterCity} style={{ fontSize:13 }}>
-            <option value="">{dirFilterCity ? 'All Sectors' : 'Select city first'}</option>
-            {dirSectorOptions.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <select value={dirFilterSociety} onChange={e => setDirFilterSociety(e.target.value)} disabled={!dirFilterSector} style={{ fontSize:13 }}>
-            <option value="">{dirFilterSector ? 'All Societies' : 'Select sector first'}</option>
-            {dirSocietyOptions.map(s => <option key={s}>{s}</option>)}
-          </select>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {/* Tabs as pill toggles */}
+          <div style={{ display:'flex', background:'var(--border-light)', borderRadius:8, padding:3, gap:2 }}>
+            <button onClick={() => setStatusTab('active')}
+              style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 14px', borderRadius:6, border:'none', fontSize:12.5, fontWeight:600, cursor:'pointer', transition:'all 0.15s',
+                background: statusTab === 'active' ? 'var(--secondary)' : 'transparent',
+                color: statusTab === 'active' ? 'white' : 'var(--text-muted)',
+                boxShadow: statusTab === 'active' ? '0 1px 4px rgba(27,94,53,0.25)' : 'none' }}>
+              <UserCheck size={13}/> Active
+              <span style={{ fontSize:10, padding:'0 5px', borderRadius:10, fontWeight:700,
+                background: statusTab === 'active' ? 'rgba(255,255,255,0.25)' : 'var(--border)',
+                color: statusTab === 'active' ? 'white' : 'var(--text-muted)' }}>{activeCount}</span>
+            </button>
+            <button onClick={() => setStatusTab('inactive')}
+              style={{ display:'flex', alignItems:'center', gap:5, padding:'6px 14px', borderRadius:6, border:'none', fontSize:12.5, fontWeight:600, cursor:'pointer', transition:'all 0.15s',
+                background: statusTab === 'inactive' ? 'var(--danger)' : 'transparent',
+                color: statusTab === 'inactive' ? 'white' : 'var(--text-muted)',
+                boxShadow: statusTab === 'inactive' ? '0 1px 4px rgba(239,68,68,0.25)' : 'none' }}>
+              <UserX size={13}/> Inactive
+              <span style={{ fontSize:10, padding:'0 5px', borderRadius:10, fontWeight:700,
+                background: statusTab === 'inactive' ? 'rgba(255,255,255,0.25)' : 'var(--border)',
+                color: statusTab === 'inactive' ? 'white' : 'var(--text-muted)' }}>{inactiveCount}</span>
+            </button>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={() => open()} style={{ padding:'7px 16px' }}>
+            <Plus size={14}/> Add Partner
+          </button>
         </div>
       </div>
 
-      <div style={{ fontSize:12.5, color:'var(--text-muted)', marginBottom:14 }}>
-        Showing <strong style={{ color:'var(--text-primary)' }}>{filteredPartners.length}</strong> {statusTab} partner{filteredPartners.length !== 1 ? 's' : ''}
-        {hasDirFilters && <span> (filtered)</span>}
+      {/* ── Compact Filters ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:16, flexWrap:'nowrap', background:'var(--surface)', padding:'10px 14px', borderRadius:'var(--radius-lg)', border:'1px solid var(--border-light)', boxShadow:'var(--shadow-sm)' }}>
+        <div style={{ position:'relative', flex: '1 1 auto', minWidth: 200 }}>
+          <Search size={14} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}/>
+          <input value={dirSearch} onChange={e => setDirSearch(e.target.value)} placeholder="Search name or mobile…" style={{ paddingLeft:32, fontSize:13, width:'100%', padding:'7px 10px 7px 32px', margin: 0 }}/>
+        </div>
+        <select value={dirFilterCity} onChange={e => { setDirFilterCity(e.target.value); setDirFilterSector(''); setDirFilterSociety('') }} style={{ fontSize:13, padding:'7px 10px', width:'auto', flexShrink:0, margin: 0 }}>
+          <option value="">All Cities</option>
+          {CITIES.map(c => <option key={c}>{c}</option>)}
+        </select>
+        <select value={dirFilterSector} onChange={e => { setDirFilterSector(e.target.value); setDirFilterSociety('') }} disabled={!dirFilterCity} style={{ fontSize:13, padding:'7px 10px', width:'auto', flexShrink:0, margin: 0 }}>
+          <option value="">{dirFilterCity ? 'All Sectors' : 'Select city first'}</option>
+          {dirSectorOptions.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select value={dirFilterSociety} onChange={e => setDirFilterSociety(e.target.value)} disabled={!dirFilterSector} style={{ fontSize:13, padding:'7px 10px', width:'auto', flexShrink:0, margin: 0 }}>
+          <option value="">{dirFilterSector ? 'All Societies' : 'Select sector'}</option>
+          {dirSocietyOptions.map(s => <option key={s}>{s}</option>)}
+        </select>
+        {hasDirFilters && (
+          <button className="btn btn-ghost btn-sm" onClick={clearDirFilters} style={{ fontSize:12, color:'var(--danger)', padding:'6px 12px', flexShrink:0, border:'1px solid var(--danger-bg)' }}>
+            <X size={12}/> Clear
+          </button>
+        )}
+        <div style={{ marginLeft:'auto', fontSize:12.5, color:'var(--text-muted)', flexShrink:0, paddingLeft: 10, borderLeft: '1px solid var(--border-light)' }}>
+          Showing <strong style={{ color:'var(--text-primary)' }}>{filteredPartners.length}</strong> {statusTab}
+        </div>
       </div>
 
       {/* Partner cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))', gap:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(340px,1fr))', gap:14 }}>
         {filteredPartners.length === 0 ? (
-          <div className="empty-state" style={{ gridColumn:'1/-1' }}>
+          <div className="empty-state" style={{ gridColumn:'1/-1', padding:40 }}>
             <div className="empty-icon">
               {statusTab === 'inactive' ? <UserX size={22}/> : <Search size={22}/>}
             </div>
-            <h3>
-              {statusTab === 'inactive' ? 'No Inactive Partners' : partners.length === 0 ? 'No pickup partners added' : 'No partners match your filters'}
-            </h3>
-            <p>
-              {statusTab === 'inactive' ? 'All partners are currently active.' : partners.length === 0 ? 'Add your first pickup partner to get started.' : 'Try adjusting the filters.'}
-            </p>
-            {hasDirFilters && <button className="btn btn-ghost btn-sm" onClick={clearDirFilters} style={{ marginTop:12 }}>Clear Filters</button>}
+            <h3>{statusTab === 'inactive' ? 'No Inactive Partners' : partners.length === 0 ? 'No pickup partners added' : 'No matches found'}</h3>
+            <p>{statusTab === 'inactive' ? 'All partners are currently active.' : partners.length === 0 ? 'Add your first pickup partner.' : 'Try adjusting the filters.'}</p>
+            {hasDirFilters && <button className="btn btn-ghost btn-sm" onClick={clearDirFilters} style={{ marginTop:10 }}>Clear Filters</button>}
           </div>
         ) : filteredPartners.map(k => {
           if (!k?.id) return null
           const active = isPartnerActive(k)
           return (
-            <div key={k.id} className="card" style={{ borderLeft: `3px solid ${active ? 'var(--secondary)' : 'var(--border)'}`, opacity: active ? 1 : 0.8 }}>
-              <div className="card-body">
+            <div key={k.id} className="card" style={{ borderLeft:`3px solid ${active ? 'var(--secondary)' : 'var(--border)'}`, opacity: active ? 1 : 0.75, transition:'all 0.15s' }}>
+              <div style={{ padding:'14px 16px' }}>
 
-                {/* Partner header */}
-                <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:12 }}>
+                {/* Top row: avatar + info + actions */}
+                <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:10 }}>
                   {k.photo ? (
-                    <div style={{ position: 'relative', flexShrink: 0 }}>
-                      <img src={k.photo} alt={k.name} style={{ width: 52, height: 52, borderRadius: 12, objectFit: 'cover', border: `2px solid ${active ? 'var(--secondary)' : 'var(--border)'}`, display: 'block', cursor: 'pointer' }}
-                        onClick={() => {
-                          const win = window.open('', '_blank')
-                          win.document.write(`<!DOCTYPE html><html><head><title>${k.name}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;}</style></head><body><img src="${k.photo}" style="max-width:100vw;max-height:100vh;object-fit:contain;"/></body></html>`)
-                          win.document.close()
-                        }}
-                      />
-                      {active && (
-                        <div style={{ position: 'absolute', bottom: -2, right: -2, width: 14, height: 14, borderRadius: '50%', background: 'var(--secondary)', border: '2px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'white' }} />
-                        </div>
-                      )}
-                    </div>
+                    <img src={k.photo} alt={k.name} onClick={() => { const w=window.open('','_blank'); w.document.write(`<!DOCTYPE html><html><head><title>${k.name}</title><style>body{margin:0;background:#111;display:flex;align-items:center;justify-content:center;min-height:100vh;}</style></head><body><img src="${k.photo}" style="max-width:100vw;max-height:100vh;object-fit:contain;"/></body></html>`); w.document.close() }}
+                      style={{ width:44, height:44, borderRadius:10, objectFit:'cover', border:`2px solid ${active ? 'var(--secondary)' : 'var(--border)'}`, cursor:'pointer', flexShrink:0 }} />
                   ) : (
-                    <div style={{ width: 52, height: 52, background: active ? 'var(--secondary-light)' : 'var(--border-light)', borderRadius: 12, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontSize: 22, fontWeight:700, color: active ? 'var(--secondary)' : 'var(--text-muted)', flexShrink:0, border: `2px solid ${active ? 'rgba(27,94,53,0.2)' : 'var(--border)'}` }}>
+                    <div style={{ width:44, height:44, background: active ? 'var(--secondary-light)' : 'var(--border-light)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontSize:19, fontWeight:700, color: active ? 'var(--secondary)' : 'var(--text-muted)', flexShrink:0 }}>
                       {(k.name||'?')[0].toUpperCase()}
                     </div>
                   )}
-
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:3, flexWrap:'wrap' }}>
-                      {k.id && <span style={{ fontFamily:'monospace', fontSize:11, fontWeight:800, color:'white', background: active ? 'var(--secondary)' : 'var(--text-muted)', padding:'2px 7px', borderRadius:5 }}>{k.id}</span>}
-                      <div style={{ fontWeight:700, fontSize:14.5 }}>{k.name||'—'}</div>
-                      <span style={{ fontSize:10, padding:'1px 6px', borderRadius:20, fontWeight:700, background: active ? 'var(--secondary-light)' : 'var(--danger-bg)', color: active ? 'var(--secondary)' : 'var(--danger)' }}>
-                        {active ? '● Active' : '○ Inactive'}
-                      </span>
+                    <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
+                      <span style={{ fontWeight:700, fontSize:14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{k.name||'—'}</span>
+                      <span style={{ fontFamily:'monospace', fontSize:9.5, fontWeight:700, color:'white', background: active ? 'var(--secondary)' : 'var(--text-muted)', padding:'1px 5px', borderRadius:4, flexShrink:0 }}>{k.id}</span>
                     </div>
-                    <div style={{ fontSize:12.5, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:4, marginTop:2 }}><Phone size={11}/> {k.mobile||'—'}</div>
-                    {k.email && <div style={{ fontSize:12, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:4, marginTop:2 }}><Mail size={11}/> {k.email}</div>}
-
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:5, flexWrap:'wrap' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:3 }}><Star size={11} fill="var(--accent)" color="var(--accent)"/><span style={{ fontSize:12, fontWeight:600 }}>{k.rating??4.0}</span></div>
-                      {k.aadhaarDoc && (
-                        <span style={{ fontSize:10, padding:'1px 7px', borderRadius:20, background:'var(--secondary-light)', color:'var(--secondary)', fontWeight:700, border:'1px solid rgba(27,94,53,0.2)', display:'inline-flex', alignItems:'center', gap:3 }}>
-                          <ShieldCheck size={9} /> Aadhaar ✓
-                        </span>
-                      )}
-                      {k.photo && (
-                        <span style={{ fontSize:10, color:'var(--info)', padding:'1px 6px', borderRadius:20, background:'var(--info-bg)', fontWeight:600 }}>
-                          📸 Photo ✓
-                        </span>
-                      )}
+                    <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:12, color:'var(--text-muted)' }}>
+                      <span style={{ display:'flex', alignItems:'center', gap:3 }}><Phone size={10}/> {k.mobile||'—'}</span>
+                      <span style={{ display:'flex', alignItems:'center', gap:3 }}><Star size={10} fill="var(--accent)" color="var(--accent)"/> {k.rating??4.0}</span>
+                      {k.aadhaarDoc && <span style={{ fontSize:9, padding:'1px 5px', borderRadius:10, background:'var(--secondary-light)', color:'var(--secondary)', fontWeight:700 }}>✓ Verified</span>}
                     </div>
                   </div>
-
-                  <div style={{ display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-                    {can.editPartner && <button className="btn btn-ghost btn-icon btn-sm" title="Edit" onClick={() => open(k)}><Edit2 size={13}/></button>}
-                    {can.deletePartner && <button className="btn btn-danger btn-icon btn-sm" title="Delete" onClick={() => removeK(k.id)}><Trash2 size={13}/></button>}
+                  <div style={{ display:'flex', gap:3, flexShrink:0 }}>
+                    {can.editPartner && <button className="btn btn-ghost btn-icon btn-sm" title="Edit" onClick={() => open(k)} style={{ padding:5 }}><Edit2 size={13}/></button>}
+                    {can.deletePartner && <button className="btn btn-danger btn-icon btn-sm" title="Delete" onClick={() => removeK(k.id)} style={{ padding:5 }}><Trash2 size={13}/></button>}
                   </div>
                 </div>
 
-                {/* Coverage */}
-                {((Array.isArray(k.sectors) && k.sectors.length > 0) || k.city || k.area) && (
-                  <div style={{ display:'flex', alignItems:'flex-start', gap:6, marginBottom:8, flexWrap:'wrap' }}>
-                    <MapPin size={11} color="var(--text-muted)" style={{ marginTop:2, flexShrink:0 }}/>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
-                      {k.city && <span style={{ background:'var(--primary-light)', color:'var(--primary)', borderRadius:20, padding:'2px 8px', fontSize:11, fontWeight:700 }}>{k.city}</span>}
-                      {(k.sectors||[]).map(s => <span key={s} style={{ background:'var(--secondary-light)', color:'var(--secondary)', borderRadius:20, padding:'2px 8px', fontSize:11, fontWeight:600 }}>{s}</span>)}
-                      {!(k.sectors?.length) && k.area && <span style={{ fontSize:12, color:'var(--text-muted)' }}>{k.area}</span>}
-                    </div>
+                {/* Coverage chips */}
+                {((k.sectors||[]).length > 0 || k.city) && (
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:4, marginBottom:8 }}>
+                    {k.city && <span style={{ background:'var(--primary-light)', color:'var(--primary)', borderRadius:20, padding:'2px 8px', fontSize:10.5, fontWeight:700 }}>{k.city}</span>}
+                    {(k.sectors||[]).map(s => <span key={s} style={{ background:'var(--secondary-light)', color:'var(--secondary)', borderRadius:20, padding:'2px 8px', fontSize:10.5, fontWeight:600 }}>{s}</span>)}
+                    {(k.societies||[]).slice(0,3).map(s => <span key={s} style={{ background:'var(--bg)', color:'var(--text-secondary)', borderRadius:20, padding:'2px 7px', fontSize:10, border:'1px solid var(--border-light)' }}>{s}</span>)}
+                    {(k.societies||[]).length > 3 && <span style={{ fontSize:10, color:'var(--text-muted)', padding:'2px 4px' }}>+{k.societies.length - 3}</span>}
                   </div>
                 )}
 
-                {/* Society tags */}
-                {(k.societies||[]).length > 0 && (
-                  <div style={{ display:'flex', flexWrap:'wrap', gap:3, marginBottom:10 }}>
-                    {(k.societies||[]).slice(0,4).map(s => (
-                      <span key={s} style={{ background:'var(--bg)', color:'var(--text-secondary)', borderRadius:20, padding:'2px 8px', fontSize:10.5, fontWeight:500, border:'1px solid var(--border-light)' }}>{s}</span>
-                    ))}
-                    {k.societies.length > 4 && <span style={{ fontSize:10.5, color:'var(--text-muted)', padding:'2px 6px' }}>+{k.societies.length - 4} more</span>}
-                  </div>
-                )}
-
+                {/* Payment stats row */}
                 <PartnerPaymentSummaryCards partner={k} raddiRecords={raddiRecords||[]}/>
                 <RateChartMini rateChart={k.rateChart} expanded={!!expandedRates[k.id]} onToggle={() => toggleRate(k.id)}/>
 
-                {/* Status toggle — Admins AND Managers can toggle */}
+                {/* Status toggle */}
                 {canToggleStatus && (
-                  <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid var(--border-light)' }}>
-                    <button
-                      onClick={() => togglePartnerStatus(k)}
+                  <div style={{ marginTop:10, paddingTop:10, borderTop:'1px solid var(--border-light)' }}>
+                    <button onClick={() => togglePartnerStatus(k)}
                       className={`btn btn-sm ${active ? 'btn-ghost' : 'btn-secondary'}`}
-                      style={{ width: '100%', justifyContent: 'center', gap: 6, fontSize: 12.5 }}
-                    >
-                      {active ? <><UserX size={13} /> Mark Inactive</> : <><RefreshCw size={13} /> Reactivate Partner</>}
+                      style={{ width:'100%', justifyContent:'center', gap:5, fontSize:12, padding:'6px 12px' }}>
+                      {active ? <><UserX size={12}/> Mark Inactive</> : <><RefreshCw size={12}/> Reactivate</>}
                     </button>
                   </div>
                 )}
