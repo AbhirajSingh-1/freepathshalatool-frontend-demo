@@ -129,12 +129,12 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
       <div className="form-group" style={{ margin:'0 0 12px' }}>
         <label style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <span>Coverage Sectors <span className="required">*</span></span>
-          <span style={{ fontSize:11, fontWeight:400, color:'var(--text-muted)' }}>Max 3 ({safeSectors.length}/3)</span>
+          <span style={{ fontSize:11, fontWeight:400, color:'var(--text-muted)' }}>Max 2 ({safeSectors.length}/2)</span>
         </label>
         <div style={{ position:'relative' }}>
           <div onClick={() => setOpenSec(o => !o)} style={{ padding:'8px 12px', border:`1.5px solid ${openSec ? 'var(--secondary)' : 'var(--border)'}`, borderRadius:'var(--radius-sm)', cursor:'pointer', background:'var(--surface)', minHeight:42, display:'flex', alignItems:'center', flexWrap:'wrap', gap:6, boxShadow: openSec ? '0 0 0 3px rgba(27,94,53,0.12)' : 'none' }}>
             {safeSectors.length === 0 ? (
-              <span style={{ color:'var(--text-muted)', fontSize:13 }}>Select up to 3 sectors…</span>
+              <span style={{ color:'var(--text-muted)', fontSize:13 }}>Select up to 2 sectors…</span>
             ) : safeSectors.map(s => (
               <span key={s} style={{ background:'var(--secondary-light)', color:'var(--secondary)', borderRadius:20, padding:'2px 10px', fontSize:12, fontWeight:600, display:'inline-flex', alignItems:'center', gap:5 }}>
                 {s}<button type="button" onClick={e => { e.stopPropagation(); toggleSector(s) }} style={{ border:'none', background:'none', cursor:'pointer', color:'var(--secondary)', padding:0, lineHeight:1 }}>×</button>
@@ -150,7 +150,7 @@ function CoverageSelector({ city, sectors, societies, onSectors, onSocieties }) 
               <div style={{ maxHeight:200, overflowY:'auto', padding:6 }}>
                 {filteredSectors.map(s => {
                   const selected = safeSectors.includes(s)
-                  const disabled = !selected && safeSectors.length >= 3
+                  const disabled = !selected && safeSectors.length >= 2
                   return (
                     <button key={s} type="button" onClick={() => { if (!disabled) toggleSector(s) }} style={{ display:'block', width:'100%', textAlign:'left', padding:'7px 10px', borderRadius:6, border:'none', background: selected ? 'var(--secondary-light)' : 'transparent', color: selected ? 'var(--secondary)' : disabled ? 'var(--text-muted)' : 'var(--text-primary)', fontWeight: selected ? 700 : 400, fontSize:12.5, cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.5 : 1 }}>
                       {s}{selected && ' ✓'}
