@@ -650,18 +650,18 @@ function DispatchPaymentSection({ totalItems, payState, onChange }) {
       {/* Amount */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
         <div className="form-group" style={{ margin: 0 }}>
-          <label style={{ fontSize: 11.5 }}>Amount Received (₹)</label>
-          <input type="number" min={0} inputMode="decimal"
-            value={amount}
-            onChange={e => onChange({ ...payState, amount: e.target.value })}
-            placeholder="0" />
-        </div>
-        <div className="form-group" style={{ margin: 0 }}>
           <label style={{ fontSize: 11.5 }}>Total Goods Value (₹)</label>
           <input type="number" min={0} inputMode="decimal"
             value={payState.totalValue || ''}
             onChange={e => onChange({ ...payState, totalValue: e.target.value })}
             placeholder="Estimated value of goods" />
+        </div>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label style={{ fontSize: 11.5 }}>Amount Received (₹)</label>
+          <input type="number" min={0} inputMode="decimal"
+            value={amount}
+            onChange={e => onChange({ ...payState, amount: e.target.value })}
+            placeholder="0" />
         </div>
       </div>
 

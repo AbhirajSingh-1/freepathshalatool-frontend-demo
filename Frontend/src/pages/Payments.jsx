@@ -378,7 +378,7 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// WRITE-OFF MODAL (unchanged)
+// WRITE-OFF MODAL
 // ══════════════════════════════════════════════════════════════════════════════
 function WriteOffModal({ context, onClose, onConfirm, saving }) {
   const [reason, setReason] = useState('')
@@ -439,7 +439,7 @@ function WriteOffModal({ context, onClose, onConfirm, saving }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PAYMENT HISTORY MODAL — enhanced with screenshot display
+// PAYMENT HISTORY MODAL
 // ══════════════════════════════════════════════════════════════════════════════
 function HistoryModal({ partner, onClose }) {
   const entries = (partner.history || []).sort((a, b) => (b.date || '').localeCompare(a.date || ''))
@@ -480,19 +480,12 @@ function HistoryModal({ partner, onClose }) {
                   {e.donorName || '—'}{e.refValue ? ` — Ref: ${e.refValue}` : ''}
                 </div>
                 {e.notes && <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 3 }}>{e.notes}</div>}
-
-                {/* ── Screenshot attached to this transaction ── */}
                 {e.screenshot && (
                   <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <ScreenshotThumb
-                      src={e.screenshot}
-                      label={`Payment Proof — ${e.donorName || ''} ${e.orderId || ''}`}
-                      size={52}
-                    />
+                    <ScreenshotThumb src={e.screenshot} label={`Payment Proof — ${e.donorName || ''} ${e.orderId || ''}`} size={52} />
                     <div>
                       <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--secondary)', marginBottom: 3 }}>UPI Proof attached</div>
-                      <button
-                        onClick={() => openImageInTab(e.screenshot, `Payment Proof — ${partner.partnerName}`)}
+                      <button onClick={() => openImageInTab(e.screenshot, `Payment Proof — ${partner.partnerName}`)}
                         style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid var(--secondary)', background: 'var(--secondary-light)', cursor: 'pointer', color: 'var(--secondary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Eye size={10} /> View Full Image
                       </button>
@@ -752,14 +745,14 @@ function PickupLedger({ pickups, onRecordPayment, onWriteOffEntry, canWriteOff, 
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// PARTNER CARD — enhanced with View Proofs
+// PARTNER CARD — with View Proofs
 // ══════════════════════════════════════════════════════════════════════════════
 function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPartner, onViewHistory, canWriteOff }) {
-  const [open,          setOpen]          = useState(false)
-  const [showProofs,    setShowProofs]    = useState(false)
-  const [sortKey,       setSortKey]       = useState('date')
-  const [sortDir,       setSortDir]       = useState('desc')
-  const [ledSearch,     setLedSearch]     = useState('')
+  const [open,       setOpen]       = useState(false)
+  const [showProofs, setShowProofs] = useState(false)
+  const [sortKey,    setSortKey]    = useState('date')
+  const [sortDir,    setSortDir]    = useState('desc')
+  const [ledSearch,  setLedSearch]  = useState('')
 
   const statusCounts = useMemo(() => {
     const c = { 'Not Paid': 0, 'Partially Paid': 0, 'Paid': 0, 'Write Off': 0 }
@@ -770,19 +763,14 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
     return c
   }, [partner.records])
 
-  // Collect all payment proofs for this partner
   const allProofs = useMemo(() => {
     const proofs = []
     partner.records.forEach(p => {
       ;(p.payHistory || []).forEach(h => {
         if (h.screenshot) {
           proofs.push({
-            screenshot: h.screenshot,
-            date: h.date,
-            amount: h.amount,
-            orderId: p.orderId || p.id,
-            donorName: p.donorName,
-            refMode: h.refMode,
+            screenshot: h.screenshot, date: h.date, amount: h.amount,
+            orderId: p.orderId || p.id, donorName: p.donorName, refMode: h.refMode,
           })
         }
       })
@@ -856,6 +844,8 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
           </div>
         )}
       </div>
+
+      {/* Action bar */}
       <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border-light)', background: 'var(--bg)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
           <strong style={{ color: 'var(--text-primary)' }}>{partner.records.length}</strong> pickup{partner.records.length !== 1 ? 's' : ''}
@@ -892,7 +882,7 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
         )}
       </div>
 
-      {/* ── View Proofs Panel ── */}
+      {/* View Proofs Panel */}
       {showProofs && allProofs.length > 0 && (
         <div style={{ borderTop: '1px solid var(--border-light)', padding: '16px 20px', background: 'linear-gradient(135deg, rgba(59,130,246,0.04), var(--surface))' }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--info)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -1347,7 +1337,7 @@ function RSTAnalytics({ raddiRecords, pickups }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SKS PAYMENT ANALYTICS — New tab
+// SKS PAYMENT ANALYTICS — complete implementation
 // ══════════════════════════════════════════════════════════════════════════════
 function SKSPaymentAnalytics() {
   const { sksOutflows } = useApp()
@@ -1369,11 +1359,11 @@ function SKSPaymentAnalytics() {
     const total = Number(pay.totalValue) || 0
     return {
       ...r,
-      _paid:   paid,
-      _total:  total,
-      _pending: Math.max(0, total - paid),
-      _status: pay.status || (total === 0 ? 'Not Recorded' : paid >= total ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Not Paid'),
-      _method: (pay.method || 'cash').toUpperCase(),
+      _paid:       paid,
+      _total:      total,
+      _pending:    Math.max(0, total - paid),
+      _status:     pay.status || (total === 0 ? 'Not Recorded' : paid >= total ? 'Paid' : paid > 0 ? 'Partially Paid' : 'Not Paid'),
+      _method:     (pay.method || 'CASH').toUpperCase(),
       _screenshot: pay.screenshot || null,
     }
   }), [sksOutflows])
@@ -1410,10 +1400,8 @@ function SKSPaymentAnalytics() {
 
   const handleExport = () => {
     exportToExcel(filtered.map(r => ({
-      'Dispatch ID': r.id,
-      'Date': r.date,
-      'Recipient': r.partnerName || '—',
-      'Phone': r.partnerPhone || '—',
+      'Dispatch ID': r.id, 'Date': r.date,
+      'Recipient': r.partnerName || '—', 'Phone': r.partnerPhone || '—',
       'Items': (r.items || []).map(it => `${it.name} ×${it.qty}`).join(', '),
       'Total Items': (r.items || []).reduce((s, it) => s + it.qty, 0),
       'Goods Value (₹)': r._total || '',
@@ -1427,9 +1415,18 @@ function SKSPaymentAnalytics() {
     })), 'SKS_Payment_Analytics')
   }
 
-  if (sksOutflows.length === 0) {
+  if ((sksOutflows || []).length === 0) {
     return (
       <div>
+        <div style={{ marginBottom: 20, padding: '12px 16px', background: 'linear-gradient(135deg, rgba(59,130,246,0.08), rgba(27,94,53,0.06))', borderRadius: 'var(--radius)', border: '1px solid rgba(59,130,246,0.2)', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <Gift size={18} color="var(--info)" style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--info)', marginBottom: 3 }}>SKS Payment Analytics</div>
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              Tracks payments received against SKS goods dispatched from the warehouse. Payment details and UPI screenshot proofs are attached to each dispatch.
+            </div>
+          </div>
+        </div>
         <div className="empty-state" style={{ padding: 80 }}>
           <div className="empty-icon" style={{ background: 'var(--info-bg)', color: 'var(--info)' }}>
             <Gift size={28} />
@@ -1548,7 +1545,11 @@ function SKSPaymentAnalytics() {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="empty-state"><div className="empty-icon"><Package size={24} /></div><h3>No records match</h3><p>Try adjusting your filters.</p></div>
+        <div className="empty-state">
+          <div className="empty-icon"><Package size={24} /></div>
+          <h3>No records match</h3>
+          <p>Try adjusting your filters.</p>
+        </div>
       ) : (
         <>
           <div className="table-wrap">
@@ -1599,6 +1600,159 @@ function SKSPaymentAnalytics() {
                     <td style={{ textAlign: 'right', fontWeight: 700, color: r._pending > 0 ? 'var(--danger)' : 'var(--text-muted)' }}>
                       {r._pending > 0 ? money(r._pending) : r._total > 0 ? <span style={{ color: 'var(--secondary)', fontSize: 11 }}>Nil</span> : '—'}
                     </td>
+                    {/* Method cell — COMPLETED */}
                     <td>
                       {r._paid > 0 ? (
                         <span style={{ fontSize: 11.5, padding: '2px 8px', borderRadius: 20, fontWeight: 600, background: 'var(--border-light)', color: 'var(--text-secondary)' }}>
+                          {r._method}
+                        </span>
+                      ) : <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>}
+                    </td>
+                    <td><PayBadge status={r._status} /></td>
+                    {/* Proof cell — images stay attached to their transaction */}
+                    <td>
+                      {r._screenshot ? (
+                        <ScreenshotThumb
+                          src={r._screenshot}
+                          label={`Payment Proof — ${r.partnerName || ''} (${r.id})`}
+                          size={40}
+                        />
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background: 'var(--secondary-light)', fontWeight: 800 }}>
+                  <td colSpan={4} style={{ fontWeight: 700 }}>Totals ({filtered.length} dispatches)</td>
+                  <td style={{ textAlign: 'right', color: 'var(--primary)' }}>{kpis.totalValue > 0 ? money(kpis.totalValue) : '—'}</td>
+                  <td style={{ textAlign: 'right', color: 'var(--secondary)' }}>{money(kpis.totalPaid)}</td>
+                  <td style={{ textAlign: 'right', color: kpis.totalPending > 0 ? 'var(--danger)' : 'var(--secondary)' }}>
+                    {kpis.totalPending > 0 ? money(kpis.totalPending) : 'All clear ✓'}
+                  </td>
+                  <td /><td /><td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="mobile-cards">
+            {filtered.map(r => (
+              <div key={r.id} className="card" style={{ marginBottom: 8, padding: 12, borderLeft: `3px solid ${r._paid > 0 ? 'var(--secondary)' : 'var(--border)'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                  <div>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 700, color: 'white', background: 'var(--secondary)', padding: '1px 6px', borderRadius: 4 }}>
+                      {r.id}
+                    </span>
+                    <div style={{ fontWeight: 700, fontSize: 13.5, marginTop: 4 }}>{r.partnerName || '—'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{fmtDate(r.date)}</div>
+                  </div>
+                  <PayBadge status={r._status} />
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+                  {(r.items || []).slice(0, 3).map(it => (
+                    <span key={it.name} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 20, background: 'var(--info-bg)', color: 'var(--info)', fontWeight: 600 }}>
+                      {it.name} ×{it.qty}
+                    </span>
+                  ))}
+                  {(r.items || []).length > 3 && <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>+{r.items.length - 3}</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {r._total > 0 && <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: 12.5 }}>{money(r._total)}</span>}
+                  {r._paid > 0 && <span style={{ color: 'var(--secondary)', fontWeight: 700, fontSize: 12.5 }}>Received: {money(r._paid)}</span>}
+                  {r._pending > 0 && <span style={{ color: 'var(--danger)', fontWeight: 700, fontSize: 12.5 }}>Due: {money(r._pending)}</span>}
+                  {/* Screenshot thumbnail stays inline with this transaction */}
+                  {r._screenshot && (
+                    <ScreenshotThumb
+                      src={r._screenshot}
+                      label={`Proof — ${r.partnerName || ''} (${r.id})`}
+                      size={36}
+                    />
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN PAYMENTS PAGE — 3 tabs
+// ══════════════════════════════════════════════════════════════════════════════
+export default function Payments() {
+  const { pickups, PickupPartners, raddiRecords, recordPickupPartnerPayment, clearPartnerBalance } = useApp()
+  const [activeTab, setActiveTab] = useState('partners')
+
+  const TABS = [
+    { id: 'partners', label: '🤝 Partner Payments',     sub: 'Track & record pickup partner dues' },
+    { id: 'rst',      label: '♻️ RST Revenue Analytics', sub: 'Per-order revenue & payment status' },
+    { id: 'sks',      label: '🎁 SKS Payment Analytics', sub: 'Dispatch payments & proof tracking' },
+  ]
+
+  return (
+    <div className="page-body">
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex', gap: 4, padding: '4px 6px',
+        background: 'var(--border-light)', borderRadius: 12,
+        width: 'fit-content', marginBottom: 24, flexWrap: 'wrap',
+      }}>
+        {TABS.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              padding: '10px 20px', borderRadius: 9, border: 'none',
+              cursor: 'pointer', fontSize: 13,
+              fontWeight: activeTab === tab.id ? 700 : 500,
+              color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
+              background: activeTab === tab.id ? 'var(--surface)' : 'transparent',
+              boxShadow: activeTab === tab.id ? 'var(--shadow)' : 'none',
+              transition: 'all 0.15s',
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Active tab sub-label */}
+      {(() => {
+        const tab = TABS.find(t => t.id === activeTab)
+        return tab ? (
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{tab.label}</span>
+            <span>—</span>
+            <span>{tab.sub}</span>
+          </div>
+        ) : null
+      })()}
+
+      {activeTab === 'partners' && (
+        <PartnerPaymentHub
+          pickups={pickups}
+          PickupPartners={PickupPartners}
+          recordPickupPartnerPayment={recordPickupPartnerPayment}
+          clearPartnerBalance={clearPartnerBalance}
+        />
+      )}
+
+      {activeTab === 'rst' && (
+        <RSTAnalytics
+          raddiRecords={raddiRecords}
+          pickups={pickups}
+        />
+      )}
+
+      {activeTab === 'sks' && (
+        <SKSPaymentAnalytics />
+      )}
+    </div>
+  )
+}
