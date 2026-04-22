@@ -593,6 +593,13 @@ export default function PickupPartners() {
     const rateChartSafe = form.rateChart || DEFAULT_RATE_CHART
     return (
       <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && close()}>
+        <style>{`
+          @media (max-width: 768px) {
+            .partner-modal-grid { grid-template-columns: 1fr !important; }
+            .partner-modal-footer { flex-direction: column !important; }
+            .partner-modal-footer .btn { width: 100% !important; margin-left: 0 !important; }
+          }
+        `}</style>
         <div className="modal" style={{ maxWidth: 1080, width: '96vw', maxHeight: '96vh', overflow: 'visible' }}>
 
           {/* Header — compact */}
@@ -619,7 +626,7 @@ export default function PickupPartners() {
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 22 }}>
+            <div className="partner-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 22 }}>
 
               {/* ═══ LEFT COLUMN ═══ */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -631,7 +638,7 @@ export default function PickupPartners() {
                 </div>
 
                 {/* Row 1: Name + Mobile */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
+                <div className="partner-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 10 }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label style={{ fontSize: 11.5 }}>Full Name <span className="required">*</span></label>
                     <input
@@ -656,7 +663,7 @@ export default function PickupPartners() {
                 </div>
 
                 {/* Row 2: City + Email */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 10 }}>
+                <div className="partner-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 10 }}>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label style={{ fontSize: 11.5 }}>City</label>
                     <select
@@ -702,7 +709,7 @@ export default function PickupPartners() {
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <IndianRupee size={11} /> Rate Chart (₹/kg)
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'rgba(27,94,53,0.12)', borderRadius: 6, overflow: 'hidden' }}>
+                  <div className="partner-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1px', background: 'rgba(27,94,53,0.12)', borderRadius: 6, overflow: 'hidden' }}>
                     {RATE_CHART_ITEMS.map(item => (
                       <div key={item} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 8px', background: 'rgba(255,255,255,0.85)', gap: 4 }}>
                         <span style={{ fontSize: 11, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{item}</span>
@@ -728,7 +735,7 @@ export default function PickupPartners() {
                   <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--info)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <FileText size={11} /> Documents <span style={{ fontSize: 9.5, fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div className="partner-modal-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <DocUpload
                       label="Photo"
                       icon={Image}
@@ -753,7 +760,7 @@ export default function PickupPartners() {
           </div>
 
           {/* Footer */}
-          <div className="modal-footer" style={{ padding: '10px 22px', background: 'var(--surface)', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)' }}>
+          <div className="modal-footer partner-modal-footer" style={{ padding: '10px 22px', background: 'var(--surface)', borderRadius: '0 0 var(--radius-lg) var(--radius-lg)' }}>
             <button className="btn btn-ghost btn-sm" onClick={close} disabled={saving}>Cancel</button>
             <button
               className="btn btn-primary btn-sm"
