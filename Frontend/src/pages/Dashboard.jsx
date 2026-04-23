@@ -620,20 +620,7 @@ export default function Dashboard({ onNav }) {
         </div>
       </div>
 
-      {/* ── Quick nav cards ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
-        {[
-          { label: 'Pickup Scheduler',  sub: 'Plan upcoming pickups',              page: 'pickupscheduler', color: 'var(--info)',       bg: 'var(--info-bg)' },
-          { label: 'Payment Tracking',  sub: `${fmtCurrency(stats.pending)} pending`, page: 'payments',     color: 'var(--warning)',   bg: 'var(--warning-bg)' },
-          { label: 'SKS Warehouse',     sub: 'Track donated goods',                page: 'sksoverview',     color: 'var(--primary)',   bg: 'var(--primary-light)' },
-        ].map(card => (
-          <button key={card.page} onClick={() => onNav(card.page)}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '14px', borderRadius: 'var(--radius)', border: `1.5px solid ${card.color}22`, background: card.bg, cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left', boxShadow: 'var(--shadow)' }}>
-            <div style={{ fontWeight: 700, fontSize: 13.5, color: card.color, marginBottom: 4 }}>{card.label}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{card.sub}</div>
-          </button>
-        ))}
-      </div>
+       
     </div>
   )
 }

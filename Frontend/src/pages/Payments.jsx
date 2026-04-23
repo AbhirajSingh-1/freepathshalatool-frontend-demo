@@ -519,7 +519,7 @@ function PartnerCard({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPart
         {/* Three money boxes */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr' }}>
           {[
-            { label: 'Total Billed',   val: money(partner.total),   color: 'var(--text-primary)',   icon: IndianRupee, hint: 'Total value of all pickups' },
+            { label: 'Total Valued',   val: money(partner.total),   color: 'var(--text-primary)',   icon: IndianRupee, hint: 'Total value of all pickups' },
             { label: 'Money Received', val: money(partner.paid),    color: 'var(--secondary)',       icon: CheckCircle, hint: 'Amount already collected' },
             { label: 'Still Pending',     val: money(partner.pending), color: partner.pending > 0 ? 'var(--danger)' : 'var(--secondary)', icon: Wallet, hint: 'Pending balance to collect' },
           ].map((item, i) => {
@@ -791,7 +791,7 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
   const handleExport = () => exportToExcel(
     partnerRows.map(r => ({
       'Pickup Partner': r.partnerName, 'Mobile': r.mobile,
-      'Total Billed (₹)': r.total, 'Money Received (₹)': r.paid,
+      'Total Value (₹)': r.total, 'Money Received (₹)': r.paid,
       'Still Pending (₹)': r.pending, 'Written Off (₹)': r.writeOff, 'Pickups': r.count,
     })),
     'Pickup_Partner_Payments'
@@ -843,9 +843,9 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
       {/* ── KPI CARDS ── */}
       <div className="stat-grid" style={{ marginBottom: 20 }}>
         {[
-          { label: 'Total Billed',   val: fmtCurrency(globalKPIs.totalRevenue),  tone: 'orange', icon: IndianRupee,  hint: 'Total value of all completed pickups' },
+          { label: 'Total Value',   val: fmtCurrency(globalKPIs.totalRevenue),  tone: 'orange', icon: IndianRupee,  hint: 'Total value of all completed pickups' },
           { label: 'Money Received', val: fmtCurrency(globalKPIs.totalReceived), tone: 'green',  icon: CheckCircle,  hint: 'Amount already collected from partners' },
-          { label: 'Still Pending',     val: fmtCurrency(globalKPIs.totalPending),  tone: 'red',    icon: Wallet,       hint: 'Pending balance — needs collection' },
+          { label: 'Amount Pending',     val: fmtCurrency(globalKPIs.totalPending),  tone: 'red',    icon: Wallet,       hint: 'Pending balance — needs collection' },
           { label: 'Written Off',    val: fmtCurrency(globalKPIs.totalWriteOff), tone: 'blue',   icon: TrendingUp,   hint: 'Amounts marked as non-recoverable' },
         ].map(item => {
           const Icon = item.icon
@@ -1292,7 +1292,7 @@ export default function Payments() {
   const [activeTab, setActiveTab] = useState('partners')
 
   const TABS = [
-    { id: 'partners', label: '🤝 Partner Payments',      desc: 'Track & record dues from pickup partners' },
+    { id: 'partners', label: '🤝 Revenue',      desc: 'Track & record dues from pickup partners' },
     { id: 'rst',      label: '♻️ RST Revenue Analytics',  desc: 'Per-order revenue & payment status' },
     { id: 'sks',      label: '🎁 SKS Payment Analytics',  desc: 'Dispatch payment records' },
   ]
