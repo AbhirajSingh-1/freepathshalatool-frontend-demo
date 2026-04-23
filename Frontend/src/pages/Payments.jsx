@@ -1,5 +1,4 @@
 // Frontend/src/pages/Payments.jsx
-// REDESIGNED: Professional fintech payment ledger UI — same features, new look
 
 import { useMemo, useState, useCallback } from 'react'
 import {
@@ -697,6 +696,7 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
   const [customTo,     setCustomTo]     = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [globalSearch, setGlobalSearch] = useState('')
+  const [partnerFilter, setPartnerFilter] = useState('')
 
   const [payContext,  setPayContext]  = useState(null)
   const [writeOffCtx, setWriteOffCtx] = useState(null)
@@ -715,11 +715,12 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
   const partnerRows = useMemo(() => {
     const q = globalSearch.toLowerCase().trim()
     const relevant = pickups.filter(p => {
-      if(p.status!=='Completed'||!p.PickupPartner) return false
-      const inDate = (!dateFrom||(p.date||'')>=dateFrom)&&(!dateTo||(p.date||'')<=dateTo)
-      const inSearch = !q||(p.PickupPartner||'').toLowerCase().includes(q)||(p.donorName||'').toLowerCase().includes(q)||(p.orderId||'').toLowerCase().includes(q)
-      return inDate&&inSearch
-    })
+  if(p.status!=='Completed'||!p.PickupPartner) return false
+  const inDate = (!dateFrom||(p.date||'')>=dateFrom)&&(!dateTo||(p.date||'')<=dateTo)
+  const inSearch = !q||(p.PickupPartner||'').toLowerCase().includes(q)||(p.donorName||'').toLowerCase().includes(q)||(p.orderId||'').toLowerCase().includes(q)
+  const inPartner = !partnerFilter || p.PickupPartner === partnerFilter    
+  return inDate&&inSearch&&inPartner                                        
+})
     const map = {}
     relevant.forEach(p => {
       const name = p.PickupPartner
@@ -736,7 +737,7 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
     if(statusFilter==='pending') rows=rows.filter(r=>r.pending>0)
     if(statusFilter==='clear')   rows=rows.filter(r=>r.pending===0)
     return rows
-  }, [pickups,PickupPartners,dateFrom,dateTo,globalSearch,statusFilter])
+ }, [pickups,PickupPartners,dateFrom,dateTo,globalSearch,statusFilter,partnerFilter])
 
   const kpis = useMemo(() => ({
     totalPartners: partnerRows.length,
@@ -809,159 +810,360 @@ function PartnerPaymentHub({ pickups, PickupPartners, recordPickupPartnerPayment
 
   return (
     <div>
-      {/* ── Hero Summary Panel ── */}
-      <div style={{ marginBottom:20, padding:'20px 24px', borderRadius:14, overflow:'hidden', position:'relative',
-        background: kpis.totalPending > 0
-          ? 'linear-gradient(135deg, #1a0a00 0%, #2d1200 50%, #1a0a00 100%)'
-          : 'linear-gradient(135deg, #0a1a0a 0%, #0d2a0d 50%, #0a1a0a 100%)',
-        boxShadow:'0 4px 24px rgba(0,0,0,0.15)',
-      }}>
-        {/* decorative circles */}
-        <div style={{ position:'absolute', top:-40, right:-40, width:180, height:180, borderRadius:'50%', background:'rgba(255,255,255,0.03)', pointerEvents:'none' }}/>
-        <div style={{ position:'absolute', bottom:-30, left:60, width:120, height:120, borderRadius:'50%', background:'rgba(255,255,255,0.02)', pointerEvents:'none' }}/>
+   {/* ── Summary Bar ── */}
+<div style={{ marginBottom: 16, borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border-light)' }}>
 
-        <div style={{ position:'relative', display:'flex', alignItems:'flex-start', gap:24, flexWrap:'wrap' }}>
-          <div style={{ flex:1, minWidth:200 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'rgba(255,255,255,0.45)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:8 }}>
-              {kpis.totalPending > 0 ? 'Pending Balance' : 'All Balances Cleared'}
-            </div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:36, fontWeight:800, lineHeight:1, color:kpis.totalPending>0?'#ff6b6b':'#4ade80', marginBottom:6 }}>
-              {money(kpis.totalPending)}
-            </div>
-            <div style={{ fontSize:12.5, color:'rgba(255,255,255,0.5)' }}>
-              {kpis.withPending} of {kpis.totalPartners} partners have pending balances
-            </div>
+  {/* Dark hero row */}
+  <div style={{ background: '#1e293b', padding: '22px 28px', display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
 
-            {/* Collection progress bar */}
-            {kpis.totalRevenue > 0 && (
-              <div style={{ marginTop:14 }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                  <span style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Collection rate</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:collectionPct===100?'#4ade80':collectionPct>=70?'#fbbf24':'#fb7185' }}>{collectionPct}%</span>
-                </div>
-                <div style={{ height:5, background:'rgba(255,255,255,0.1)', borderRadius:3, overflow:'hidden' }}>
-                  <div style={{ height:'100%', borderRadius:3, width:`${Math.min(100,collectionPct)}%`,
-                    background:collectionPct===100?'#4ade80':collectionPct>=70?'#fbbf24':'#fb7185',
-                    transition:'width 0.6s ease' }}/>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Stat blocks */}
-          <div style={{ display:'flex', gap:2, background:'rgba(255,255,255,0.06)', borderRadius:10, overflow:'hidden', flexShrink:0, flexWrap:'wrap' }}>
-            {[
-              { l:'Total Billed', v:money(kpis.totalRevenue), c:'rgba(255,255,255,0.9)' },
-              { l:'Received',     v:money(kpis.totalReceived), c:'#4ade80' },
-              { l:'Written Off',  v:money(kpis.totalWriteOff), c:'rgba(255,255,255,0.4)' },
-            ].map((s,i) => (
-              <div key={s.l} style={{ padding:'14px 20px', textAlign:'center',
-                borderLeft: i>0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-                <div style={{ fontFamily:'var(--font-display)', fontSize:18, fontWeight:800, color:s.c, lineHeight:1 }}>{s.v}</div>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em', marginTop:4 }}>{s.l}</div>
-              </div>
-            ))}
-          </div>
-        </div>
+    {/* Pending amount */}
+    <div style={{ flex: '1 1 200px' }}>
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#fca5a5', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 99, padding: '3px 10px', marginBottom: 10 }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', flexShrink: 0 }} />
+        {kpis.totalPending > 0 ? 'Pending Balance' : 'All Clear'}
       </div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 38, fontWeight: 800, lineHeight: 1, letterSpacing: '-1px', color: kpis.totalPending > 0 ? '#f87171' : '#4ade80' }}>
+        {money(kpis.totalPending)}
+      </div>
+      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', marginTop: 6 }}>
+        {kpis.withPending} of {kpis.totalPartners} partners have outstanding dues
+      </div>
+    </div>
+
+    {/* Vertical divider */}
+    <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+
+    {/* Stat cards */}
+    <div style={{ display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap' }}>
+      {[
+        {
+          label: 'Total Billed', value: money(kpis.totalRevenue),
+          sub: `${kpis.totalPartners} partners`,
+          bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.1)',
+          labelColor: 'rgba(255,255,255,0.4)', valueColor: '#f1f5f9', subColor: 'rgba(255,255,255,0.3)',
+        },
+        {
+          label: 'Received', value: money(kpis.totalReceived),
+          sub: `${collectionPct}% collected`,
+          bg: 'rgba(34,197,94,0.12)', border: 'rgba(34,197,94,0.25)',
+          labelColor: '#4ade80', valueColor: '#4ade80', subColor: 'rgba(74,222,128,0.6)',
+        },
+        {
+          label: 'Written Off', value: money(kpis.totalWriteOff),
+          sub: 'non-recoverable',
+          bg: 'rgba(255,255,255,0.03)', border: 'rgba(255,255,255,0.06)',
+          labelColor: 'rgba(255,255,255,0.2)', valueColor: 'rgba(255,255,255,0.25)', subColor: 'rgba(255,255,255,0.15)',
+        },
+      ].map(s => (
+        <div key={s.label} style={{ background: s.bg, border: `1px solid ${s.border}`, borderRadius: 12, padding: '14px 18px', minWidth: 110 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: s.labelColor, marginBottom: 6 }}>
+            {s.label}
+          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, lineHeight: 1, color: s.valueColor }}>
+            {s.value}
+          </div>
+          <div style={{ fontSize: 10.5, color: s.subColor, marginTop: 4 }}>{s.sub}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+
+  {/* Progress strip */}
+  {kpis.totalRevenue > 0 && (
+    <div style={{ background: 'var(--bg)', borderTop: '1px solid var(--border-light)', padding: '10px 28px', display: 'flex', alignItems: 'center', gap: 14 }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Collection rate</span>
+      <div style={{ flex: 1, height: 6, background: 'var(--border-light)', borderRadius: 99, overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 99, width: `${Math.min(100, collectionPct)}%`, background: collectionPct >= 80 ? '#22c55e' : collectionPct >= 50 ? 'var(--warning)' : 'var(--danger)', transition: 'width 0.6s ease' }} />
+      </div>
+      <span style={{ fontSize: 12, fontWeight: 700, color: collectionPct >= 80 ? '#16a34a' : collectionPct >= 50 ? 'var(--warning)' : 'var(--danger)', whiteSpace: 'nowrap' }}>
+        {collectionPct}%
+      </span>
+      {kpis.withPending > 0 && (
+        <span style={{ marginLeft: 4, fontSize: 10.5, fontWeight: 600, color: '#dc2626', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 99, padding: '3px 10px', whiteSpace: 'nowrap' }}>
+          {kpis.withPending} with pending
+        </span>
+      )}
+    </div>
+  )}
+</div>
 
       {/* ── Toolbar ── */}
-      <div style={{ ...styles.surface, padding:'12px 16px', marginBottom:14 }}>
-        <div style={{ display:'flex', gap:8, flexWrap:'wrap', alignItems:'center' }}>
+      <div
+        style={{ ...styles.surface, padding: "12px 16px", marginBottom: 14 }}
+      >
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
           {/* Date pills */}
-          <div style={{ display:'flex', gap:4, background:'var(--bg)', borderRadius:8, padding:3 }}>
-            {DATE_PRESETS.map(p => (
-              <button key={p.id} onClick={() => setDatePreset(p.id)}
-                style={{ padding:'5px 12px', borderRadius:6, border:'none', cursor:'pointer', fontSize:12, fontWeight:datePreset===p.id?700:400,
-                  color:datePreset===p.id?'var(--text-primary)':'var(--text-muted)',
-                  background:datePreset===p.id?'var(--surface)':'transparent',
-                  boxShadow:datePreset===p.id?'var(--shadow)':'none', transition:'all 0.12s' }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 4,
+              background: "var(--bg)",
+              borderRadius: 8,
+              padding: 3,
+            }}
+          >
+            {DATE_PRESETS.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setDatePreset(p.id)}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 6,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: datePreset === p.id ? 700 : 400,
+                  color:
+                    datePreset === p.id
+                      ? "var(--text-primary)"
+                      : "var(--text-muted)",
+                  background:
+                    datePreset === p.id ? "var(--surface)" : "transparent",
+                  boxShadow: datePreset === p.id ? "var(--shadow)" : "none",
+                  transition: "all 0.12s",
+                }}
+              >
                 {p.label}
               </button>
             ))}
           </div>
 
-          {datePreset === 'custom' && (
-            <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-              <input type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{ width:136, fontSize:12 }}/>
-              <span style={{ fontSize:11, color:'var(--text-muted)' }}>–</span>
-              <input type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{ width:136, fontSize:12 }}/>
+          {datePreset === "custom" && (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <input
+                type="date"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                style={{ width: 136, fontSize: 12 }}
+              />
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                –
+              </span>
+              <input
+                type="date"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                style={{ width: 136, fontSize: 12 }}
+              />
             </div>
           )}
 
-          <div style={{ height:20, width:1, background:'var(--border-light)', flexShrink:0 }}/>
+          <div
+            style={{
+              height: 20,
+              width: 1,
+              background: "var(--border-light)",
+              flexShrink: 0,
+            }}
+          />
 
           {/* Search */}
-          <div style={{ position:'relative', flex:'1 1 200px', minWidth:0 }}>
-            <Search size={13} style={{ position:'absolute', left:10, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)', pointerEvents:'none' }}/>
-            <input value={globalSearch} onChange={e=>setGlobalSearch(e.target.value)}
+          <div style={{ position: "relative", flex: "1 1 200px", minWidth: 0 }}>
+            <Search
+              size={13}
+              style={{
+                position: "absolute",
+                left: 10,
+                top: "50%",
+                transform: "translateY(-50%)",
+                color: "var(--text-muted)",
+                pointerEvents: "none",
+              }}
+            />
+            <input
+              value={globalSearch}
+              onChange={(e) => setGlobalSearch(e.target.value)}
               placeholder="Search partner, donor, order…"
-              style={{ paddingLeft:32, width:'100%', fontSize:13 }}/>
+              style={{ paddingLeft: 32, width: "100%", fontSize: 13 }}
+            />
           </div>
-
+          {/* Partner filter */}
+          <select
+            value={partnerFilter}
+            onChange={(e) => setPartnerFilter(e.target.value)}
+            style={{
+              fontSize: 13,
+              padding: "5px 10px",
+              height: 34,
+              borderRadius: "var(--radius-sm)",
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              color: "var(--text-primary)",
+              flexShrink: 0,
+              maxWidth: 160,
+            }}
+          >
+            <option value="">All Partners</option>
+            {PickupPartners.map((k) => (
+              <option key={k.id} value={k.name}>
+                {k.name}
+              </option>
+            ))}
+          </select>
           {/* Status filter */}
-          <div style={{ display:'flex', background:'var(--bg)', borderRadius:8, padding:3, gap:2 }}>
+          <div
+            style={{
+              display: "flex",
+              background: "var(--bg)",
+              borderRadius: 8,
+              padding: 3,
+              gap: 2,
+            }}
+          >
             {[
-              { id:'all',     label:'All',     count:partnerRows.length },
-              { id:'pending', label:'Pending', count:partnerRows.filter(r=>r.pending>0).length },
-              { id:'clear',   label:'Paid',    count:partnerRows.filter(r=>r.pending===0).length },
-            ].map(t => (
-              <button key={t.id} onClick={() => setStatusFilter(t.id)}
-                style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 12px', borderRadius:6, border:'none', cursor:'pointer',
-                  fontSize:12, fontWeight:statusFilter===t.id?700:400,
-                  color:statusFilter===t.id?'var(--text-primary)':'var(--text-muted)',
-                  background:statusFilter===t.id?'var(--surface)':'transparent',
-                  boxShadow:statusFilter===t.id?'var(--shadow)':'none', transition:'all 0.12s' }}>
+              { id: "all", label: "All", count: partnerRows.length },
+              {
+                id: "pending",
+                label: "Pending",
+                count: partnerRows.filter((r) => r.pending > 0).length,
+              },
+              {
+                id: "clear",
+                label: "Paid",
+                count: partnerRows.filter((r) => r.pending === 0).length,
+              },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setStatusFilter(t.id)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  padding: "5px 12px",
+                  borderRadius: 6,
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: 12,
+                  fontWeight: statusFilter === t.id ? 700 : 400,
+                  color:
+                    statusFilter === t.id
+                      ? "var(--text-primary)"
+                      : "var(--text-muted)",
+                  background:
+                    statusFilter === t.id ? "var(--surface)" : "transparent",
+                  boxShadow: statusFilter === t.id ? "var(--shadow)" : "none",
+                  transition: "all 0.12s",
+                }}
+              >
                 {t.label}
-                <span style={{
-                  background:statusFilter===t.id?(t.id==='pending'?'var(--danger)':t.id==='clear'?'var(--secondary)':'var(--primary)'):'var(--border)',
-                  color:statusFilter===t.id?'white':'var(--text-muted)',
-                  borderRadius:20, fontSize:10.5, fontWeight:700, padding:'0 6px',
-                }}>{t.count}</span>
+                <span
+                  style={{
+                    background:
+                      statusFilter === t.id
+                        ? t.id === "pending"
+                          ? "var(--danger)"
+                          : t.id === "clear"
+                            ? "var(--secondary)"
+                            : "var(--primary)"
+                        : "var(--border)",
+                    color:
+                      statusFilter === t.id ? "white" : "var(--text-muted)",
+                    borderRadius: 20,
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    padding: "0 6px",
+                  }}
+                >
+                  {t.count}
+                </span>
               </button>
             ))}
           </div>
 
-          <button className="btn btn-ghost btn-sm" onClick={handleExport} style={{ flexShrink:0 }}>
-            <Download size={13}/> Export
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={handleExport}
+            style={{ flexShrink: 0 }}
+          >
+            <Download size={13} /> Export
           </button>
         </div>
       </div>
 
       {/* ── Results ── */}
-      <div style={{ fontSize:12.5, color:'var(--text-muted)', marginBottom:12, display:'flex', alignItems:'center', gap:8 }}>
-        <span><strong style={{ color:'var(--text-primary)' }}>{partnerRows.length}</strong> partners</span>
-        {kpis.withPending > 0 && statusFilter !== 'clear' && (
-          <span style={{ color:'var(--danger)', fontWeight:600 }}>· {kpis.withPending} with pending</span>
+      <div
+        style={{
+          fontSize: 12.5,
+          color: "var(--text-muted)",
+          marginBottom: 12,
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+        }}
+      >
+        <span>
+          <strong style={{ color: "var(--text-primary)" }}>
+            {partnerRows.length}
+          </strong>{" "}
+          partners
+        </span>
+        {kpis.withPending > 0 && statusFilter !== "clear" && (
+          <span style={{ color: "var(--danger)", fontWeight: 600 }}>
+            · {kpis.withPending} with pending
+          </span>
         )}
       </div>
 
       {/* ── Partner Rows ── */}
       {partnerRows.length === 0 ? (
         <div className="empty-state">
-          <div className="empty-icon"><Users size={24}/></div>
+          <div className="empty-icon">
+            <Users size={24} />
+          </div>
           <h3>No Partners Found</h3>
           <p>Try adjusting date range or filters.</p>
         </div>
-      ) : partnerRows.map(partner => (
-        <PartnerRow key={partner.partnerName} partner={partner}
-          onRecordPayment={openPayModal}
-          onWriteOffEntry={openWriteOffEntry}
-          onWriteOffPartner={openWriteOffPartner}
-          onViewHistory={p => setHistPartner(p)}
-          canWriteOff={canWriteOff}/>
-      ))}
+      ) : (
+        partnerRows.map((partner) => (
+          <PartnerRow
+            key={partner.partnerName}
+            partner={partner}
+            onRecordPayment={openPayModal}
+            onWriteOffEntry={openWriteOffEntry}
+            onWriteOffPartner={openWriteOffPartner}
+            onViewHistory={(p) => setHistPartner(p)}
+            canWriteOff={canWriteOff}
+          />
+        ))
+      )}
 
-      {payContext  && <RecordPaymentModal context={payContext}  onClose={()=>setPayContext(null)}  onSave={handlePaySave}           saving={saving}/>}
-      {writeOffCtx && <WriteOffModal      context={writeOffCtx} onClose={()=>setWriteOffCtx(null)} onConfirm={handleWriteOffConfirm} saving={saving}/>}
-      {histPartner && <HistoryModal       partner={histPartner} onClose={()=>setHistPartner(null)}/>}
-      <ToastStack toasts={toasts} onRemove={removeToast}/>
+      {payContext && (
+        <RecordPaymentModal
+          context={payContext}
+          onClose={() => setPayContext(null)}
+          onSave={handlePaySave}
+          saving={saving}
+        />
+      )}
+      {writeOffCtx && (
+        <WriteOffModal
+          context={writeOffCtx}
+          onClose={() => setWriteOffCtx(null)}
+          onConfirm={handleWriteOffConfirm}
+          saving={saving}
+        />
+      )}
+      {histPartner && (
+        <HistoryModal
+          partner={histPartner}
+          onClose={() => setHistPartner(null)}
+        />
+      )}
+      <ToastStack toasts={toasts} onRemove={removeToast} />
     </div>
-  )
+  );
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// RST ANALYTICS (same logic, refreshed table styling)
+// RST ANALYTICS  
 // ══════════════════════════════════════════════════════════════════════════════
 function PayBadge({ status }) {
   const MAP = {
@@ -1156,7 +1358,7 @@ function RSTAnalytics({ raddiRecords, pickups }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// SKS PAYMENT ANALYTICS (same logic, refreshed styling)
+// SKS PAYMENT ANALYTICS  
 // ══════════════════════════════════════════════════════════════════════════════
 function SKSPaymentAnalytics() {
   const { sksOutflows } = useApp()
@@ -1297,7 +1499,7 @@ function SKSPaymentAnalytics() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MAIN PAYMENTS PAGE — redesigned tab bar + shell
+// MAIN PAYMENTS PAGE 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Payments() {
   const { pickups, PickupPartners, raddiRecords, recordPickupPartnerPayment, clearPartnerBalance } = useApp()
