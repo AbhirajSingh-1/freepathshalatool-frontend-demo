@@ -560,7 +560,6 @@ export default function Dashboard({ onNav }) {
 
   return (
     <div className="page-body">
-
       {/* ── Compact Filters ── */}
       <FiltersPanel filters={filters} onChange={setFilters} pickups={pickups} />
 
