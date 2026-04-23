@@ -240,7 +240,7 @@ function RecordPaymentModal({ context, onClose, onSave, saving }) {
             </div>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
               {[
-                { l:'Billed',   v:money(context.total),   c:'var(--text-primary)' },
+                { l:'Total RST value',   v:money(context.total),   c:'var(--text-primary)' },
                 { l:'Received', v:money(context.paid),    c:'var(--secondary)' },
                 { l:'Pending',  v:money(context.pending), c:context.pending>0?'var(--danger)':'var(--secondary)' },
               ].map(i => (
@@ -495,10 +495,25 @@ function PickupRow({ pickup, onPay, onWriteOff, canWriteOff }) {
           <span style={{ fontWeight:600, fontSize:13 }}>{pickup.donorName}</span>
           <span style={{ fontSize:11.5, color:'var(--text-muted)' }}>{fmtDate(pickup.date)}</span>
         </div>
+       {(pickup.society || pickup.sector) && (
+  <div style={{ 
+    display:'flex', alignItems:'center', gap:5, 
+    fontSize:11.5, fontWeight:500,
+    margin:'4px 0',
+    padding:'3px 9px',
+    background:'var(--secondary-light)',
+    borderRadius:20,
+    width:'fit-content',
+    color:'var(--secondary)',
+  }}>
+    <MapPin size={10} style={{ flexShrink:0 }}/>
+    {[pickup.society, pickup.sector, pickup.city].filter(Boolean).join(', ')}
+  </div>
+)}
         <div style={{ display:'flex', gap:12, fontSize:12, flexWrap:'wrap' }}>
-          {total>0 && <span>Billed: <strong style={{ color:'var(--primary)' }}>{money(total)}</strong></span>}
-          {paid>0  && <span>Rcvd: <strong style={{ color:'var(--secondary)' }}>{money(paid)}</strong></span>}
-          {pending>0 && <span>Due: <strong style={{ color:'var(--danger)' }}>{money(pending)}</strong></span>}
+          {total>0 && <span>Total RST value: <strong style={{ color:'var(--primary)' }}>{money(total)}</strong></span>}
+          {paid>0  && <span>Amount Recieved: <strong style={{ color:'var(--secondary)' }}>{money(paid)}</strong></span>}
+          {pending>0 && <span>Amount Due: <strong style={{ color:'var(--danger)' }}>{money(pending)}</strong></span>}
         </div>
       </div>
       <PayStatusDot status={ps}/>
@@ -577,7 +592,7 @@ function PartnerRow({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPartn
         {/* Financial figures */}
         <div style={{ display:'flex', gap:0, flex:'0 0 auto' }}>
           {[
-            { l:'Billed',   v:money(partner.total),   c:'var(--text-primary)' },
+            { l:'Total RST value',   v:money(partner.total),   c:'var(--text-primary)' },
             { l:'Received', v:money(partner.paid),    c:'var(--secondary)' },
             { l:'Pending',  v:money(partner.pending), c:partner.pending>0?'var(--danger)':'var(--secondary)' },
           ].map((item,i) => (
@@ -646,11 +661,18 @@ function PartnerRow({ partner, onRecordPayment, onWriteOffEntry, onWriteOffPartn
           )}
 
           <button onClick={() => setOpen(o=>!o)}
-            style={{ width:32, height:32, borderRadius:8, border:'1px solid var(--border)',
-              background:'transparent', cursor:'pointer', display:'flex', alignItems:'center',
-              justifyContent:'center', color:'var(--text-muted)', transition:'all 0.15s' }}>
-            {open ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
-          </button>
+  style={{ 
+    display:'flex', alignItems:'center', gap:5,
+    padding:'7px 12px', borderRadius:8,
+    border:'1px solid var(--border)',
+    background: open ? 'var(--surface-alt)' : 'transparent',
+    cursor:'pointer', fontSize:12, fontWeight:600,
+    color:'var(--text-secondary)', transition:'all 0.15s',
+    whiteSpace:'nowrap',
+  }}>
+  {open ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+  View Pickups
+</button>
         </div>
       </div>
 
@@ -1316,7 +1338,7 @@ function RSTAnalytics({ raddiRecords, pickups }) {
                 <SortTh k="partnerName">Partner</SortTh>
                 <SortTh k="donorName">Donor</SortTh>
                 <SortTh k="pickupDate">Date</SortTh>
-                <SortTh k="total" align="right">Billed</SortTh>
+                <SortTh k="total" align="right">Total RST value</SortTh>
                 <SortTh k="collected" align="right">Received</SortTh>
                 <SortTh k="pending" align="right">Pending</SortTh>
                 <th>Status</th>
