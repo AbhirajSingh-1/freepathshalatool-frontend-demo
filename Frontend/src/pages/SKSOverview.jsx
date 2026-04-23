@@ -293,7 +293,7 @@ function StockInForm({ allSKSItems, onAdd, onAddCustomItem, showToast }) {
     <div className="card">
       <div className="card-header" style={{ background: 'linear-gradient(135deg, var(--secondary-light), var(--surface))' }}>
         <ArrowDownCircle size={18} color="var(--secondary)" />
-        <div className="card-title" style={{ color: 'var(--secondary)' }}>Record Stock In</div>
+        <div className="card-title" style={{ color: 'var(--secondary)' }}>Add Items in Stock</div>
         {totalQty > 0 && (
           <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: 'var(--secondary)', background: 'var(--secondary-light)', padding: '3px 12px', borderRadius: 20, border: '1px solid rgba(27,94,53,0.2)' }}>
             {totalQty} items ready to save
@@ -965,25 +965,6 @@ function StockOutView({ stock, allSKSItems, outflows, isAdmin, onAddOutflow, onD
 
   return (
     <div>
-      {/* KPIs */}
-      <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat-card green">
-          <div className="stat-icon"><Boxes size={18} /></div>
-          <div className="stat-value">{Object.values(stock).reduce((s, v) => s + v, 0)}</div>
-          <div className="stat-label">Available in Stock</div>
-        </div>
-        <div className="stat-card orange">
-          <div className="stat-icon"><ArrowUpCircle size={18} /></div>
-          <div className="stat-value">{outflows.reduce((s, r) => s + (r.items || []).reduce((a, it) => a + it.qty, 0), 0)}</div>
-          <div className="stat-label">Total Dispatched</div>
-          <div className="stat-change up">{outflows.length} dispatches</div>
-        </div>
-        <div className="stat-card blue">
-          <div className="stat-icon"><IndianRupee size={18} /></div>
-          <div className="stat-value">{fmtCurrency(outflows.reduce((s, r) => s + (r.payment?.amount || 0), 0))}</div>
-          <div className="stat-label">Payments Received</div>
-        </div>
-      </div>
 
       {/* Dispatch form */}
       <div className="card" style={{ marginBottom: 16, border: '2px solid var(--primary)' }}>
@@ -1188,33 +1169,6 @@ export default function SKSOverview() {
 
   return (
     <div className="page-body">
-      {/* Global KPIs */}
-      <div className="stat-grid" style={{ marginBottom: 20 }}>
-        <div className="stat-card green">
-          <div className="stat-icon"><Boxes size={18} /></div>
-          <div className="stat-value">{totalInStock}</div>
-          <div className="stat-label">In Warehouse Now</div>
-          <div className="stat-change up">{sksInflows.length} inflow entries</div>
-        </div>
-        <div className="stat-card blue">
-          <div className="stat-icon"><ArrowDownCircle size={18} /></div>
-          <div className="stat-value">{totalReceived}</div>
-          <div className="stat-label">Total Received</div>
-          <div className="stat-change up">across all entries</div>
-        </div>
-        <div className="stat-card orange">
-          <div className="stat-icon"><ArrowUpCircle size={18} /></div>
-          <div className="stat-value">{totalDispatched}</div>
-          <div className="stat-label">Total Dispatched</div>
-          <div className="stat-change up">{sksOutflows.length} dispatches</div>
-        </div>
-        <div className="stat-card yellow">
-          <div className="stat-icon"><IndianRupee size={18} /></div>
-          <div className="stat-value">{fmtCurrency(sksOutflows.reduce((s, r) => s + (r.payment?.amount || 0), 0))}</div>
-          <div className="stat-label">SKS Payments In</div>
-        </div>
-      </div>
-
       {/* Section tabs */}
       <div style={{ display: 'flex', gap: 4, padding: '4px 6px', background: 'var(--border-light)', borderRadius: 12, width: 'fit-content', marginBottom: 24, flexWrap: 'wrap' }}>
         {TABS.map(tab => (
