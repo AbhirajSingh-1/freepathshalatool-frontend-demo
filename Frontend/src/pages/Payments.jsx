@@ -1267,17 +1267,17 @@ function RSTAnalytics({ raddiRecords, pickups }) {
   return (
     <div>
       {/* KPI strip */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:'clamp(6px, 1.5vw, 12px)', marginBottom:16 }}>
         {[
           { l:'Total Revenue', v:money(totals.revenue), tone:'orange', icon:IndianRupee },
           { l:'Collected',     v:money(totals.collected), tone:'green', icon:CheckCircle },
           { l:'Pending',       v:money(totals.pending), tone:'red', icon:AlertCircle },
           { l:'Weight',        v:`${totals.kg.toFixed(1)} kg`, tone:'blue', icon:Package },
         ].map(item => { const Icon=item.icon; return (
-          <div key={item.l} className={`stat-card ${item.tone}`}>
-            <div className="stat-icon"><Icon size={18}/></div>
-            <div className="stat-value">{item.v}</div>
-            <div className="stat-label">{item.l}</div>
+          <div key={item.l} className={`stat-card ${item.tone}`} style={{ padding: 'clamp(8px, 2vw, 16px) clamp(4px, 1vw, 16px)', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+            <div className="stat-icon" style={{ width: 'clamp(24px, 6vw, 38px)', height: 'clamp(24px, 6vw, 38px)', marginBottom: 8, borderRadius: 8 }}><Icon size={14}/></div>
+            <div className="stat-value" style={{ fontSize: 'clamp(13px, 3.5vw, 24px)', marginBottom: 2, width: '100%' }}>{item.v}</div>
+            <div className="stat-label" style={{ fontSize: 'clamp(9px, 2.5vw, 12px)', whiteSpace: 'normal', lineHeight: 1.1 }}>{item.l}</div>
           </div>
         )})}
       </div>
@@ -1333,49 +1333,127 @@ function RSTAnalytics({ raddiRecords, pickups }) {
       {filtered.length===0 ? (
         <div className="empty-state"><div className="empty-icon"><BarChart3 size={24}/></div><h3>No records</h3><p>Try different filters.</p></div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <SortTh k="partnerName">Partner</SortTh>
-                <SortTh k="donorName">Donor</SortTh>
-                <SortTh k="pickupDate">Date</SortTh>
-                <SortTh k="total" align="right">Total RST value</SortTh>
-                <SortTh k="collected" align="right">Received</SortTh>
-                <SortTh k="pending" align="right">Pending</SortTh>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => (
-                <tr key={r.orderId||r.pickupId}>
-                  <td>
-                    <div style={{ fontWeight:700 }}>{r.partnerName}</div>
-                    <OrderIdChip id={r.orderId||r.pickupId}/>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight:600 }}>{r.donorName||'—'}</div>
-                    <div style={{ fontSize:11.5, color:'var(--text-muted)' }}>{[r.society,r.sector].filter(Boolean).join(', ')}</div>
-                  </td>
-                  <td style={{ whiteSpace:'nowrap', fontSize:12.5 }}>{fmtDate(r.pickupDate)}</td>
-                  <td style={{ textAlign:'right', fontWeight:700, color:'var(--primary)' }}>{money(r.total)}</td>
-                  <td style={{ textAlign:'right', fontWeight:700, color:'var(--secondary)' }}>{r.collected>0?money(r.collected):'—'}</td>
-                  <td style={{ textAlign:'right', fontWeight:700, color:r.pending>0?'var(--danger)':'var(--text-muted)' }}>{r.pending>0?money(r.pending):'—'}</td>
-                  <td><PayBadge status={r.paymentStatus}/></td>
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <SortTh k="partnerName">Partner</SortTh>
+                  <SortTh k="donorName">Donor</SortTh>
+                  <th>Items</th>
+                  <SortTh k="pickupDate">Date</SortTh>
+                  <SortTh k="total" align="right">Total RST value</SortTh>
+                  <SortTh k="collected" align="right">Received</SortTh>
+                  <SortTh k="pending" align="right">Pending</SortTh>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr style={{ background:'var(--secondary-light)', fontWeight:800 }}>
-                <td colSpan={3}>Totals ({filtered.length} records)</td>
-                <td style={{ textAlign:'right', color:'var(--primary)' }}>{money(totals.revenue)}</td>
-                <td style={{ textAlign:'right', color:'var(--secondary)' }}>{money(totals.collected)}</td>
-                <td style={{ textAlign:'right', color:totals.pending>0?'var(--danger)':'var(--secondary)' }}>{totals.pending>0?money(totals.pending):'All clear ✓'}</td>
-                <td/>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map(r => (
+                  <tr key={r.orderId||r.pickupId}>
+                    <td>
+                      <div style={{ fontWeight:700 }}>{r.partnerName}</div>
+                      <OrderIdChip id={r.orderId||r.pickupId}/>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight:600 }}>{r.donorName||'—'}</div>
+                      <div style={{ fontSize:11.5, color:'var(--text-muted)' }}>{[r.society,r.sector].filter(Boolean).join(', ')}</div>
+                    </td>
+                    <td>
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                        {Object.keys(r.itemKgMap||{}).length > 0 ? (
+                          <>
+                            {Object.entries(r.itemKgMap).slice(0,3).map(([item, kg])=>(
+                              <span key={item} style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background:'var(--info-bg)', color:'var(--info)', fontWeight:600 }}>{item} {kg?`×${kg}kg`:''}</span>
+                            ))}
+                            {Object.keys(r.itemKgMap).length>3&&<span style={{ fontSize:10, color:'var(--text-muted)' }}>+{Object.keys(r.itemKgMap).length-3}</span>}
+                          </>
+                        ) : (r.rstItems||[]).length > 0 ? (
+                          <>
+                            {(r.rstItems).slice(0,3).map(item=>(
+                              <span key={item} style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background:'var(--secondary-light)', color:'var(--secondary)', fontWeight:600 }}>{item}</span>
+                            ))}
+                            {(r.rstItems).length>3&&<span style={{ fontSize:10, color:'var(--text-muted)' }}>+{(r.rstItems).length-3}</span>}
+                          </>
+                        ) : <span style={{ fontSize:11, color:'var(--text-muted)' }}>—</span>}
+                      </div>
+                    </td>
+                    <td style={{ whiteSpace:'nowrap', fontSize:12.5 }}>{fmtDate(r.pickupDate)}</td>
+                    <td style={{ textAlign:'right', fontWeight:700, color:'var(--primary)' }}>{money(r.total)}</td>
+                    <td style={{ textAlign:'right', fontWeight:700, color:'var(--secondary)' }}>{r.collected>0?money(r.collected):'—'}</td>
+                    <td style={{ textAlign:'right', fontWeight:700, color:r.pending>0?'var(--danger)':'var(--text-muted)' }}>{r.pending>0?money(r.pending):'—'}</td>
+                    <td><PayBadge status={r.paymentStatus}/></td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ background:'var(--secondary-light)', fontWeight:800 }}>
+                  <td colSpan={4}>Totals ({filtered.length} records)</td>
+                  <td style={{ textAlign:'right', color:'var(--primary)' }}>{money(totals.revenue)}</td>
+                  <td style={{ textAlign:'right', color:'var(--secondary)' }}>{money(totals.collected)}</td>
+                  <td style={{ textAlign:'right', color:totals.pending>0?'var(--danger)':'var(--secondary)' }}>{totals.pending>0?money(totals.pending):'All clear ✓'}</td>
+                  <td/>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          
+          <div className="mobile-cards">
+            {filtered.map(r => (
+              <div key={r.orderId||r.pickupId} style={{ background:'var(--surface)', padding:'14px 16px', borderRadius:10, border:'1px solid var(--border-light)', marginBottom:10 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:10, marginBottom:6 }}>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.partnerName}</div>
+                    <OrderIdChip id={r.orderId||r.pickupId}/>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ fontSize:12, color:'var(--text-muted)' }}>{fmtDate(r.pickupDate)}</div>
+                    <PayBadge status={r.paymentStatus}/>
+                  </div>
+                </div>
+                <div style={{ fontSize:13, color:'var(--text-secondary)', marginBottom:8, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                  Donor: <span style={{ fontWeight:600 }}>{r.donorName||'—'}</span>
+                  <div style={{ fontSize:11.5, color:'var(--text-muted)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{[r.society,r.sector].filter(Boolean).join(', ')}</div>
+                </div>
+                
+                <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:10 }}>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                    {Object.keys(r.itemKgMap||{}).length > 0 ? (
+                      <>
+                        {Object.entries(r.itemKgMap).slice(0,3).map(([item, kg])=>(
+                          <span key={item} style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background:'var(--info-bg)', color:'var(--info)', fontWeight:600 }}>{item} {kg?`×${kg}kg`:''}</span>
+                        ))}
+                        {Object.keys(r.itemKgMap).length>3&&<span style={{ fontSize:10, color:'var(--text-muted)' }}>+{Object.keys(r.itemKgMap).length-3}</span>}
+                      </>
+                    ) : (r.rstItems||[]).length > 0 ? (
+                      <>
+                        {(r.rstItems).slice(0,3).map(item=>(
+                          <span key={item} style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background:'var(--secondary-light)', color:'var(--secondary)', fontWeight:600 }}>{item}</span>
+                        ))}
+                        {(r.rstItems).length>3&&<span style={{ fontSize:10, color:'var(--text-muted)' }}>+{(r.rstItems).length-3}</span>}
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div style={{ display:'flex', justifyContent:'space-between', background:'var(--surface-alt)', padding:'8px 12px', borderRadius:8 }}>
+                  <div style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase' }}>Total</div>
+                    <div style={{ fontWeight:700, color:'var(--primary)' }}>{money(r.total)}</div>
+                  </div>
+                  <div style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase' }}>Received</div>
+                    <div style={{ fontWeight:700, color:'var(--secondary)' }}>{r.collected>0?money(r.collected):'—'}</div>
+                  </div>
+                  <div style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase' }}>Pending</div>
+                    <div style={{ fontWeight:700, color:r.pending>0?'var(--danger)':'var(--text-muted)' }}>{r.pending>0?money(r.pending):'—'}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
@@ -1440,10 +1518,23 @@ function SKSPaymentAnalytics() {
 
   return (
     <div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:16 }}>
-        <div className="stat-card blue"><div className="stat-icon"><Package size={18}/></div><div className="stat-value">{filtered.length}</div><div className="stat-label">Dispatches</div><div className="stat-change up">{kpis.totalItems} items</div></div>
-        <div className="stat-card green"><div className="stat-icon"><CheckCircle size={18}/></div><div className="stat-value">{fmtCurrency(kpis.totalPaid)}</div><div className="stat-label">Received</div></div>
-        <div className="stat-card red"><div className="stat-icon"><AlertCircle size={18}/></div><div className="stat-value">{fmtCurrency(kpis.totalPending)}</div><div className="stat-label">Pending</div></div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:'clamp(6px, 1.5vw, 12px)', marginBottom:16 }}>
+        <div className="stat-card blue" style={{ padding: 'clamp(8px, 2vw, 16px)', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="stat-icon" style={{ width: 'clamp(28px, 6vw, 38px)', height: 'clamp(28px, 6vw, 38px)', marginBottom: 8, borderRadius: 8 }}><Package size={16}/></div>
+          <div className="stat-value" style={{ fontSize: 'clamp(15px, 4vw, 24px)', marginBottom: 2, width: '100%' }}>{filtered.length}</div>
+          <div className="stat-label" style={{ fontSize: 'clamp(10px, 2.5vw, 12px)' }}>Dispatches</div>
+          <div className="stat-change up" style={{ fontSize: 'clamp(9px, 2vw, 11.5px)', marginTop: 4 }}>{kpis.totalItems} items</div>
+        </div>
+        <div className="stat-card green" style={{ padding: 'clamp(8px, 2vw, 16px)', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="stat-icon" style={{ width: 'clamp(28px, 6vw, 38px)', height: 'clamp(28px, 6vw, 38px)', marginBottom: 8, borderRadius: 8 }}><CheckCircle size={16}/></div>
+          <div className="stat-value" style={{ fontSize: 'clamp(14px, 4vw, 24px)', marginBottom: 2, width: '100%' }}>{fmtCurrency(kpis.totalPaid)}</div>
+          <div className="stat-label" style={{ fontSize: 'clamp(10px, 2.5vw, 12px)' }}>Received</div>
+        </div>
+        <div className="stat-card red" style={{ padding: 'clamp(8px, 2vw, 16px)', minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div className="stat-icon" style={{ width: 'clamp(28px, 6vw, 38px)', height: 'clamp(28px, 6vw, 38px)', marginBottom: 8, borderRadius: 8 }}><AlertCircle size={16}/></div>
+          <div className="stat-value" style={{ fontSize: 'clamp(14px, 4vw, 24px)', marginBottom: 2, width: '100%' }}>{fmtCurrency(kpis.totalPending)}</div>
+          <div className="stat-label" style={{ fontSize: 'clamp(10px, 2.5vw, 12px)' }}>Pending</div>
+        </div>
       </div>
 
       <div style={{ ...styles.surface, padding:'12px 16px', marginBottom:14 }}>
@@ -1480,43 +1571,87 @@ function SKSPaymentAnalytics() {
       {filtered.length===0 ? (
         <div className="empty-state"><div className="empty-icon"><Package size={24}/></div><h3>No records match</h3><p>Adjust filters.</p></div>
       ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <SortTh k="id">ID</SortTh>
-                <SortTh k="date">Date</SortTh>
-                <SortTh k="partnerName">Recipient</SortTh>
-                <th>Items</th>
-                <SortTh k="_paid" align="right">Received</SortTh>
-                <SortTh k="_pending" align="right">Pending</SortTh>
-                <th>Status</th>
-                <th>Proof</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(r => (
-                <tr key={r.id}>
-                  <td><code style={{ fontSize:11, fontWeight:700, color:'var(--secondary)', background:'var(--secondary-light)', padding:'2px 7px', borderRadius:5 }}>{r.id}</code></td>
-                  <td style={{ whiteSpace:'nowrap', fontWeight:600, fontSize:12.5 }}>{fmtDate(r.date)}</td>
-                  <td><div style={{ fontWeight:700 }}>{r.partnerName||'—'}</div>{r.partnerPhone&&<div style={{ fontSize:11.5, color:'var(--text-muted)' }}>{r.partnerPhone}</div>}</td>
-                  <td>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
-                      {(r.items||[]).slice(0,3).map(it=>(
-                        <span key={it.name} style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background:'var(--info-bg)', color:'var(--info)', fontWeight:600 }}>{it.name} ×{it.qty}</span>
-                      ))}
-                      {(r.items||[]).length>3&&<span style={{ fontSize:10, color:'var(--text-muted)' }}>+{r.items.length-3}</span>}
-                    </div>
-                  </td>
-                  <td style={{ textAlign:'right', fontWeight:700, color:r._paid>0?'var(--secondary)':'var(--text-muted)' }}>{r._paid>0?money(r._paid):'—'}</td>
-                  <td style={{ textAlign:'right', fontWeight:700, color:r._pending>0?'var(--danger)':'var(--text-muted)' }}>{r._pending>0?money(r._pending):'—'}</td>
-                  <td><PayBadge status={r._status}/></td>
-                  <td>{r._screenshot?<ScreenshotThumb src={r._screenshot} size={36}/>:<span style={{ color:'var(--text-muted)', fontSize:11 }}>—</span>}</td>
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <SortTh k="id">ID</SortTh>
+                  <SortTh k="date">Date</SortTh>
+                  <SortTh k="partnerName">Recipient</SortTh>
+                  <th>Items</th>
+                  <SortTh k="_paid" align="right">Received</SortTh>
+                  <SortTh k="_pending" align="right">Pending</SortTh>
+                  <th>Status</th>
+                  <th>Proof</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filtered.map(r => (
+                  <tr key={r.id}>
+                    <td><code style={{ fontSize:11, fontWeight:700, color:'var(--secondary)', background:'var(--secondary-light)', padding:'2px 7px', borderRadius:5 }}>{r.id}</code></td>
+                    <td style={{ whiteSpace:'nowrap', fontWeight:600, fontSize:12.5 }}>{fmtDate(r.date)}</td>
+                    <td><div style={{ fontWeight:700 }}>{r.partnerName||'—'}</div>{r.partnerPhone&&<div style={{ fontSize:11.5, color:'var(--text-muted)' }}>{r.partnerPhone}</div>}</td>
+                    <td>
+                      <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                        {(r.items||[]).slice(0,3).map(it=>(
+                          <span key={it.name} style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background:'var(--info-bg)', color:'var(--info)', fontWeight:600 }}>{it.name} ×{it.qty}</span>
+                        ))}
+                        {(r.items||[]).length>3&&<span style={{ fontSize:10, color:'var(--text-muted)' }}>+{r.items.length-3}</span>}
+                      </div>
+                    </td>
+                    <td style={{ textAlign:'right', fontWeight:700, color:r._paid>0?'var(--secondary)':'var(--text-muted)' }}>{r._paid>0?money(r._paid):'—'}</td>
+                    <td style={{ textAlign:'right', fontWeight:700, color:r._pending>0?'var(--danger)':'var(--text-muted)' }}>{r._pending>0?money(r._pending):'—'}</td>
+                    <td><PayBadge status={r._status}/></td>
+                    <td>{r._screenshot?<ScreenshotThumb src={r._screenshot} size={36}/>:<span style={{ color:'var(--text-muted)', fontSize:11 }}>—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mobile-cards">
+            {filtered.map(r => (
+              <div key={r.id} style={{ background:'var(--surface)', padding:'14px 16px', borderRadius:10, border:'1px solid var(--border-light)', marginBottom:10 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:10, marginBottom:6 }}>
+                  <div style={{ minWidth:0, flex:1 }}>
+                    <div style={{ fontWeight:700, fontSize:14, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{r.partnerName||'—'}</div>
+                    <code style={{ fontSize:11, fontWeight:700, color:'var(--secondary)', background:'var(--secondary-light)', padding:'2px 7px', borderRadius:5, display:'inline-block', marginTop:2 }}>{r.id}</code>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ fontSize:12, color:'var(--text-muted)' }}>{fmtDate(r.date)}</div>
+                    <PayBadge status={r._status}/>
+                  </div>
+                </div>
+                {r.partnerPhone && <div style={{ fontSize:12, color:'var(--text-muted)', marginBottom:6 }}>{r.partnerPhone}</div>}
+                
+                <div style={{ fontSize:12, color:'var(--text-secondary)', marginBottom:10 }}>
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                    {(r.items||[]).slice(0,3).map(it=>(
+                      <span key={it.name} style={{ fontSize:10, padding:'1px 6px', borderRadius:20, background:'var(--info-bg)', color:'var(--info)', fontWeight:600 }}>{it.name} ×{it.qty}</span>
+                    ))}
+                    {(r.items||[]).length>3&&<span style={{ fontSize:10, color:'var(--text-muted)' }}>+{r.items.length-3}</span>}
+                  </div>
+                </div>
+
+                <div style={{ display:'flex', justifyContent:'space-between', background:'var(--surface-alt)', padding:'8px 12px', borderRadius:8 }}>
+                  <div style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase' }}>Received</div>
+                    <div style={{ fontWeight:700, color:r._paid>0?'var(--secondary)':'var(--text-muted)' }}>{r._paid>0?money(r._paid):'—'}</div>
+                  </div>
+                  <div style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase' }}>Pending</div>
+                    <div style={{ fontWeight:700, color:r._pending>0?'var(--danger)':'var(--text-muted)' }}>{r._pending>0?money(r._pending):'—'}</div>
+                  </div>
+                  <div style={{ textAlign:'right', display:'flex', flexDirection:'column', alignItems:'flex-end' }}>
+                    <div style={{ fontSize:10, color:'var(--text-muted)', textTransform:'uppercase', marginBottom:2 }}>Proof</div>
+                    {r._screenshot?<ScreenshotThumb src={r._screenshot} size={24}/>:<span style={{ color:'var(--text-muted)', fontSize:11 }}>—</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   )
